@@ -1,0 +1,83 @@
+{% extends "core/base.html" %}
+
+{% block title %}Upload document | TariTech{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+
+  <!-- Page header -->
+  <div class="mb-8">
+    <h1 class="text-2xl font-semibold text-gray-900">
+      Upload document
+    </h1>
+    <p class="mt-1 text-sm text-gray-500">
+      Add a document to your private knowledge base. Supported format: PDF.
+    </p>
+  </div>
+
+  <!-- Card -->
+  <div class="bg-white border border-gray-200 rounded-xl shadow-sm">
+    <form
+      method="post"
+      enctype="multipart/form-data"
+      class="p-8 space-y-6"
+    >
+      {% csrf_token %}
+
+      <!-- Document name -->
+      <div>
+        <label
+          for="{{ form.original_name.id_for_label }}"
+          class="block text-sm font-medium text-gray-700"
+        >
+          Document name
+        </label>
+
+        <div class="mt-1">
+          {{ form.original_name }}
+        </div>
+
+        <p class="mt-1 text-xs text-gray-500">
+          A descriptive name to identify the document.
+        </p>
+      </div>
+
+      <!-- File -->
+      <div>
+        <label
+          for="{{ form.file.id_for_label }}"
+          class="block text-sm font-medium text-gray-700"
+        >
+          File
+        </label>
+
+        <div class="mt-1">
+          {{ form.file }}
+        </div>
+
+        <p class="mt-1 text-xs text-gray-500">
+          Only PDF files. Max size depends on server configuration.
+        </p>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+        <a
+          href="{% url 'documents:list' %}"
+          class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+        >
+          Cancel
+        </a>
+
+        <button
+          type="submit"
+          class="inline-flex items-center rounded-md bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 transition shadow-sm"
+        >
+          Upload document
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

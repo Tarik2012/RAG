@@ -1,5 +1,63 @@
 {% extends "core/base.html" %}
 
+{% block title %}Home | RAG Backend{% endblock %}
+
 {% block content %}
-  <p>Welcome.</p>
+  <section class="bg-white rounded-lg shadow-sm border p-8">
+    <h2 class="text-2xl font-semibold mb-2">
+      Private Knowledge Assistant
+    </h2>
+
+    <p class="text-gray-600 mb-6">
+      This system allows you to upload internal documents and query them
+      using a controlled AI assistant. All responses are generated strictly
+      from your uploaded content.
+    </p>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <!-- Documents -->
+      <div class="border rounded-lg p-6 hover:shadow transition">
+        <h3 class="font-medium text-lg mb-2">
+          Documents
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Upload and manage PDF or Excel files that will be used as the
+          knowledge base for the assistant.
+        </p>
+        <span class="text-sm text-accent font-medium">
+          Available soon
+        </span>
+      </div>
+
+      <!-- Questions -->
+      <div class="border rounded-lg p-6 hover:shadow transition">
+        <h3 class="font-medium text-lg mb-2">
+          Ask Questions
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Ask natural language questions and receive answers grounded
+          exclusively in your documents.
+        </p>
+        <span class="text-sm text-accent font-medium">
+          Available soon
+        </span>
+      </div>
+
+      <!-- System -->
+      <div class="border rounded-lg p-6 hover:shadow transition">
+        <h3 class="font-medium text-lg mb-2">
+          System Status
+        </h3>
+        <p class="text-sm text-gray-600 mb-4">
+          Monitor ingestion, embeddings, and system readiness before
+          querying documents.
+        </p>
+        <span class="text-sm text-accent font-medium">
+          Available soon
+        </span>
+      </div>
+
+    </div>
+  </section>
 {% endblock %}

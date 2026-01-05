@@ -3,19 +3,105 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RAG Backend</title>
+
+    <title>{% block title %}TariTech | Intelligent Knowledge Systems{% endblock %}</title>
+
+    <!-- Tailwind CDN (no build, no install) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind basic config -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#0f172a",
+              accent: "#2563eb",
+            },
+          },
+        },
+      };
+    </script>
   </head>
-  <body>
-    <header>
-      <h1>RAG Backend</h1>
+
+  <body class="min-h-screen flex flex-col bg-gray-50 text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-primary text-white">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+
+        <!-- Brand -->
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-lg bg-accent flex items-center justify-center font-bold text-lg">
+            T
+          </div>
+          <div class="leading-tight">
+            <span class="text-lg font-semibold tracking-tight">
+              TariTech
+            </span>
+            <div class="text-xs text-slate-400">
+              Intelligent Knowledge Systems
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="hidden md:flex items-center space-x-6 text-sm">
+          <a href="{% url 'core:home' %}" class="text-slate-300 hover:text-white transition">
+            Home
+          </a>
+          <a href="{% url 'documents:list' %}" class="text-slate-300 hover:text-white transition">
+            Documents
+          </a>
+          <span class="text-slate-500 cursor-not-allowed">
+            Ask AI
+          </span>
+        </nav>
+
+        <!-- Auth (ADMIN ONLY, SIMPLE) -->
+        <div class="flex items-center space-x-4 text-sm">
+          <span class="hidden sm:inline text-slate-400">
+            Internal platform
+          </span>
+
+          {% if user.is_authenticated %}
+            <span class="text-slate-300">
+              {{ user.username }}
+            </span>
+
+            <a
+              href="/admin/logout/?next=/"
+              class="text-slate-300 hover:text-white transition"
+            >
+              Cerrar sesión
+            </a>
+          {% else %}
+            <a
+              href="/admin/login/?next=/"
+              class="text-slate-300 hover:text-white transition"
+            >
+              Conectarse
+            </a>
+          {% endif %}
+        </div>
+
+      </div>
     </header>
 
-    <main>
-      {% block content %}{% endblock %}
+    <!-- Main -->
+    <main class="flex-1">
+      <div class="max-w-7xl mx-auto px-6 py-8">
+        {% block content %}{% endblock %}
+      </div>
     </main>
 
-    <footer>
-      <small>&copy; 2026</small>
+    <!-- Footer -->
+    <footer class="bg-gray-100 border-t">
+      <div class="max-w-7xl mx-auto px-6 py-4 text-sm text-gray-500 flex flex-col sm:flex-row justify-between gap-2">
+        <span>&copy; 2026 TariTech</span>
+        <span>Private knowledge platform for professionals</span>
+      </div>
     </footer>
+
   </body>
 </html>

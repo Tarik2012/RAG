@@ -1,3 +1,55 @@
 from django.contrib import admin
+from .models import Document, DocumentChunk
 
-# Register your models here.
+
+@admin.register(Document)
+class DocumentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "original_name",
+        "owner",
+        "content_type",
+        "size",
+        "status",
+        "created_at",
+        "chunks_count",
+    )
+
+    list_filter = (
+        "status",
+        "content_type",
+        "created_at",
+    )
+
+    search_fields = (
+        "original_name",
+        "owner__username",
+    )
+
+    readonly_fields = (
+        "created_at",
+    )
+
+    def chunks_count(self, obj):
+        return obj.chunks.count()
+
+    chunks_count.short_description = "Chunks"
+
+
+@admin.register(DocumentChunk)
+class DocumentChunkAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "document",
+        "order",
+        "created_at",
+    )
+
+    list_filter = (
+        "document",
+    )
+
+    search_fields = (
+        "document__original_name",
+        "text",
+    )

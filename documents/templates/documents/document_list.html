@@ -1,0 +1,98 @@
+{% extends "core/base.html" %}
+
+{% block title %}Documents | TariTech{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <div>
+    <h2 class="text-2xl font-semibold text-gray-800">Documents</h2>
+    <p class="text-sm text-gray-500">
+      Manage and organize your uploaded files
+    </p>
+  </div>
+
+  <a
+    href="{% url 'documents:upload' %}"
+    class="bg-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-500 transition"
+  >
+    Upload document
+  </a>
+</div>
+
+<div class="bg-white shadow rounded-md overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-100 text-gray-600">
+      <tr>
+        <th class="text-left px-4 py-3">Name</th>
+        <th class="text-left px-4 py-3">Type</th>
+        <th class="text-left px-4 py-3">Size</th>
+        <th class="text-left px-4 py-3">Status</th>
+        <th class="text-left px-4 py-3">Created</th>
+        <th class="text-right px-4 py-3">Actions</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {% for doc in documents %}
+        <tr class="border-t hover:bg-gray-50 transition">
+          <td class="px-4 py-3 font-medium text-gray-800">
+            {{ doc.original_name }}
+          </td>
+
+          <td class="px-4 py-3 text-gray-600">
+            {{ doc.content_type }}
+          </td>
+
+          <td class="px-4 py-3 text-gray-600">
+            {{ doc.size|filesizeformat }}
+          </td>
+
+          <td class="px-4 py-3">
+            <span class="px-2 py-1 rounded text-xs font-medium
+              {% if doc.status == 'processed' %}bg-green-100 text-green-700
+              {% elif doc.status == 'processing' %}bg-yellow-100 text-yellow-700
+              {% elif doc.status == 'failed' %}bg-red-100 text-red-700
+              {% else %}bg-gray-100 text-gray-700{% endif %}">
+              {{ doc.status }}
+            </span>
+          </td>
+
+          <td class="px-4 py-3 text-gray-600">
+            {{ doc.created_at|date:"Y-m-d H:i" }}
+          </td>
+
+          <td class="px-4 py-3 text-right">
+            <form
+              method="post"
+              action="{% url 'documents:delete' doc.pk %}"
+              onsubmit="return confirm('Delete this document?');"
+            >
+              {% csrf_token %}
+              <button
+                type="submit"
+                class="text-red-600 hover:text-red-800 text-sm font-medium transition"
+              >
+                Delete
+              </button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr>
+          <td colspan="6" class="px-6 py-12 text-center">
+            <p class="text-gray-500 text-sm mb-3">
+              No documents uploaded yet
+            </p>
+            <a
+              href="{% url 'documents:upload' %}"
+              class="inline-block bg-accent text-white px-4 py-2 rounded-md text-sm hover:bg-blue-500 transition"
+            >
+              Upload your first document
+            </a>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
