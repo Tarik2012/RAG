@@ -9,7 +9,7 @@ def chunk_text(
     """
     Divide un texto en chunks solapados.
 
-    - chunk_size: tamaño máximo del chunk (caracteres)
+    - chunk_size: tamano maximo del chunk (caracteres)
     - overlap: solapamiento entre chunks
     """
 

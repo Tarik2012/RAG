@@ -1,5 +1,8 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
+
+import hashlib
 
 
 class Document(models.Model):
@@ -34,8 +37,15 @@ class Document(models.Model):
 
 
 class DocumentChunk(models.Model):
+    EMBEDDING_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("processing", "Processing"),
+        ("embedded", "Embedded"),
+        ("failed", "Failed"),
+    ]
+
     document = models.ForeignKey(
-        Document,
+        "Document",
         on_delete=models.CASCADE,
         related_name="chunks",
     )
@@ -43,8 +53,20 @@ class DocumentChunk(models.Model):
     order = models.PositiveIntegerField()
     text = models.TextField()
 
-    # Embedding se añadirá en la siguiente fase (RAG)
+    # Idempotencia para embeddings
+    text_hash = models.CharField(max_length=64, db_index=True)
+
+    # Embedding (por ahora en JSON; más adelante migraremos a pgvector)
     embedding = models.JSONField(null=True, blank=True)
+
+    embedding_status = models.CharField(
+        max_length=20,
+        choices=EMBEDDING_STATUS_CHOICES,
+        default="pending",
+        db_index=True,
+    )
+    embedding_model = models.CharField(max_length=100, null=True, blank=True)
+    embedded_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -58,4 +80,25 @@ class DocumentChunk(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.document.original_name} · chunk {self.order}"
+        return f"{self.document.original_name} - chunk {self.order}"
+
+    def compute_text_hash(self) -> str:
+        return hashlib.sha256(self.text.encode("utf-8")).hexdigest()
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+
+        if update_fields and "text" in update_fields:
+            update_fields = set(update_fields)
+            update_fields.add("text_hash")
+            kwargs["update_fields"] = list(update_fields)
+
+        # Mantener text_hash siempre consistente con text
+        self.text_hash = self.compute_text_hash()
+        super().save(*args, **kwargs)
+
+    def mark_embedded(self, *, model_name: str):
+        self.embedding_status = "embedded"
+        self.embedding_model = model_name
+        self.embedded_at = timezone.now()
+        self.save(update_fields=["embedding_status", "embedding_model", "embedded_at"])

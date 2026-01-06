@@ -30,28 +30,17 @@ def document_upload(request):
             doc = form.save(commit=False)
             uploaded_file = request.FILES["file"]
 
-            # 🔐 Propietario
+            # Propietario
             doc.owner = request.user
 
-            # 📄 Metadatos
+            # Metadatos
             doc.content_type = uploaded_file.content_type or ""
             doc.size = uploaded_file.size
-            doc.status = "processing"
 
             doc.save()
 
-            try:
-                # 🔥 INGESTIÓN RAG (sync por ahora)
-                chunks_created = process_document(doc)
-
-                doc.status = "processed" if chunks_created > 0 else "failed"
-                doc.save(update_fields=["status"])
-
-            except Exception:
-                # ⚠️ Falla controlada
-                doc.status = "failed"
-                doc.save(update_fields=["status"])
-                raise  # en dev queremos ver el error
+            # Ingestion RAG (sync por ahora)
+            process_document(doc)
 
             return redirect("documents:list")
 

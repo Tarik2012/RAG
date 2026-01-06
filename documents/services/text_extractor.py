@@ -3,16 +3,16 @@ from pypdf import PdfReader
 
 def extract_text_from_document(document) -> str:
     """
-    Extrae texto de un documento según su tipo.
+    Extrae texto de un documento segun su tipo.
     Actualmente soporta PDF.
     """
 
-    content_type = document.content_type.lower()
+    content_type = (document.content_type or "").lower()
 
     if "pdf" in content_type:
         return _extract_text_from_pdf(document.file.path)
 
-    # Tipos no soportados todavía
+    # Tipos no soportados todavia
     return ""
 
 

@@ -1,5 +1,6 @@
 from django.db import transaction
 from documents.models import Document, DocumentChunk
+import hashlib
 
 
 def persist_chunks(document: Document, chunks: list[str]) -> None:
@@ -17,6 +18,7 @@ def persist_chunks(document: Document, chunks: list[str]) -> None:
                 document=document,
                 order=index,
                 text=chunk,
+                text_hash=hashlib.sha256(chunk.encode("utf-8")).hexdigest(),
             )
             for index, chunk in enumerate(chunks)
         ]
