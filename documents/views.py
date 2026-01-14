@@ -103,3 +103,40 @@ def ask_view(request):
     result = ask_service.ask(question=question)
 
     return JsonResponse(result, status=200)
+
+
+from django.shortcuts import redirect
+
+@login_required
+def ask_page(request):
+    if request.method == "POST":
+        question = request.POST.get("question", "").strip()
+
+        if question:
+            embedding_provider = FakeEmbeddingProvider()
+            retriever = Retriever(embedding_provider)
+            llm_provider = FakeLLMProvider()
+
+            ask_service = AskService(
+                retriever=retriever,
+                llm_provider=llm_provider,
+            )
+
+            result = ask_service.ask(question=question)
+
+            # Guardamos la respuesta en sesión (temporal)
+            request.session["ask_answer"] = result
+
+        return redirect("documents:ask_ui")
+
+    # GET
+    answer = request.session.pop("ask_answer", None)
+
+    return render(
+        request,
+        "documents/ask.html",
+        {
+            "answer": answer,
+            "question": "",
+        },
+    )

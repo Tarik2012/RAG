@@ -53,9 +53,13 @@
           <a href="{% url 'documents:list' %}" class="text-slate-300 hover:text-white transition">
             Documents
           </a>
-          <span class="text-slate-500 cursor-not-allowed">
+          <a
+            href="{% url 'documents:ask_ui' %}"
+            class="text-slate-300 hover:text-white transition"
+          >
             Ask AI
-          </span>
+          </a>
+
         </nav>
 
         <!-- Auth (ADMIN ONLY, SIMPLE) -->
