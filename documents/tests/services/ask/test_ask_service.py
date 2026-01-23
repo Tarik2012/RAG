@@ -2,13 +2,33 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from documents.models import Document, DocumentChunk
-from documents.services.embeddings.embedding_provider import FakeEmbeddingProvider
 from documents.services.retrieval.retriever import Retriever
 from documents.services.ask.ask_service import AskService
-from documents.services.llm.fake_llm_provider import FakeLLMProvider
+from documents.services.llm.llm_provider import LLMProvider
 
 
 pytestmark = pytest.mark.django_db
+
+
+class TestEmbeddingProvider:
+    DIMENSION = 8
+
+    def embed_texts(self, texts):
+        embeddings = []
+        for text in texts:
+            vector = [float((ord(c) % 10)) for c in text[: self.DIMENSION]]
+            vector += [0.0] * (self.DIMENSION - len(vector))
+            embeddings.append(vector)
+        return embeddings
+
+
+class TestLLMProvider(LLMProvider):
+    def generate(self, *, question: str, context: str) -> str:
+        return (
+            "FAKE ANSWER\n"
+            f"QUESTION: {question}\n"
+            f"CONTEXT: {context[:200]}"
+        )
 
 
 @pytest.fixture
@@ -32,14 +52,14 @@ def embedded_chunks(document):
             order=i,
             text=text,
             embedding_status="embedded",
-            embedding=[1.0] * FakeEmbeddingProvider.DIMENSION,
+            embedding=[1.0] * TestEmbeddingProvider.DIMENSION,
             embedding_model="fake",
         )
 
 
 def test_ask_service_returns_answer_and_context(embedded_chunks):
-    retriever = Retriever(FakeEmbeddingProvider())
-    llm = FakeLLMProvider()
+    retriever = Retriever(TestEmbeddingProvider())
+    llm = TestLLMProvider()
 
     ask_service = AskService(
         retriever=retriever,

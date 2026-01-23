@@ -2,12 +2,32 @@ import json
 import pytest
 
 from django.urls import reverse
+import documents.views as views
 
 
 pytestmark = pytest.mark.django_db
 
 
-def test_ask_view_returns_200(client):
+class DummyEmbeddingProvider:
+    def embed_texts(self, texts):
+        return [[0.0] * 3 for _ in texts]
+
+
+class DummyLLMProvider:
+    def generate(self, *, question: str, context: str) -> str:
+        return "stub answer"
+
+
+class DummyQueryRewriter:
+    def rewrite(self, question: str) -> str:
+        return question
+
+
+def test_ask_view_returns_200(client, monkeypatch):
+    monkeypatch.setattr(views, "OpenAIEmbeddingProvider", DummyEmbeddingProvider)
+    monkeypatch.setattr(views, "OpenAILLMProvider", DummyLLMProvider)
+    monkeypatch.setattr(views, "QueryRewriter", DummyQueryRewriter)
+
     url = reverse("documents:ask")
 
     response = client.post(

@@ -115,3 +115,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # =========================
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+
+# =========================
+# OpenAI / RAG settings
+# =========================
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+RAG_LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "fake")

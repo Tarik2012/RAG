@@ -3,10 +3,21 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from documents.models import Document, DocumentChunk
 from documents.services.embeddings.chunk_embedder import ChunkEmbedder
-from documents.services.embeddings.embedding_provider import FakeEmbeddingProvider
 
 
 pytestmark = pytest.mark.django_db
+
+
+class TestEmbeddingProvider:
+    DIMENSION = 8
+
+    def embed_texts(self, texts):
+        embeddings = []
+        for text in texts:
+            vector = [float((ord(c) % 10)) for c in text[: self.DIMENSION]]
+            vector += [0.0] * (self.DIMENSION - len(vector))
+            embeddings.append(vector)
+        return embeddings
 
 
 @pytest.fixture
@@ -52,7 +63,7 @@ def model_name():
 
 @pytest.fixture
 def embedder(model_name):
-    provider = FakeEmbeddingProvider()
+    provider = TestEmbeddingProvider()
     return ChunkEmbedder(provider, model_name=model_name)
 
 
@@ -64,7 +75,7 @@ def embedded_chunks(chunks, embedder):
 
 
 def test_embedder_saves_embeddings_for_multiple_chunks(embedded_chunks):
-    provider = FakeEmbeddingProvider()
+    provider = TestEmbeddingProvider()
     expected = provider.embed_texts([chunk.text for chunk in embedded_chunks])
 
     assert [chunk.embedding for chunk in embedded_chunks] == expected
@@ -84,7 +95,7 @@ def test_embedder_sets_embedded_at(embedded_chunks):
 
 def test_embedder_uses_expected_embedding_dimension(embedded_chunks):
     assert all(
-        len(chunk.embedding) == FakeEmbeddingProvider.DIMENSION
+        len(chunk.embedding) == TestEmbeddingProvider.DIMENSION
         for chunk in embedded_chunks
     )
 
@@ -100,7 +111,7 @@ def test_embedder_noops_on_empty_list(embedder, chunks):
 
 
 def test_embedder_raises_on_invalid_embedding_count(chunks, model_name):
-    class BadFakeEmbeddingProvider(FakeEmbeddingProvider):
+    class BadFakeEmbeddingProvider(TestEmbeddingProvider):
         def embed_texts(self, texts):
             embeddings = super().embed_texts(texts)
             return embeddings[:-1]

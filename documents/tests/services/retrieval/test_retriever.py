@@ -2,7 +2,6 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from documents.models import Document, DocumentChunk
-from documents.services.embeddings.embedding_provider import FakeEmbeddingProvider
 from documents.services.retrieval.retriever import Retriever
 
 
@@ -32,7 +31,7 @@ def embedded_chunks(document):
             order=i,
             text=text,
             embedding_status="embedded",
-            embedding=[float(i + 1)] * FakeEmbeddingProvider.DIMENSION,
+            embedding=[float(i + 1)] * TestEmbeddingProvider.DIMENSION,
             embedding_model="fake",
         )
         chunks.append(chunk)
@@ -41,10 +40,20 @@ def embedded_chunks(document):
 
 
 def test_retriever_returns_top_k_chunks(embedded_chunks):
-    provider = FakeEmbeddingProvider()
+    provider = TestEmbeddingProvider()
     retriever = Retriever(provider)
 
     results = retriever.retrieve(query="alpha", top_k=2)
 
     assert len(results) == 2
     assert all(isinstance(score, float) for _, score in results)
+class TestEmbeddingProvider:
+    DIMENSION = 8
+
+    def embed_texts(self, texts):
+        embeddings = []
+        for text in texts:
+            vector = [float((ord(c) % 10)) for c in text[: self.DIMENSION]]
+            vector += [0.0] * (self.DIMENSION - len(vector))
+            embeddings.append(vector)
+        return embeddings

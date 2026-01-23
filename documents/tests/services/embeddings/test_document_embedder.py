@@ -4,10 +4,21 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from documents.models import Document, DocumentChunk
 from documents.services.embeddings.chunk_embedder import ChunkEmbedder
 from documents.services.embeddings.document_embedder import DocumentEmbedder
-from documents.services.embeddings.embedding_provider import FakeEmbeddingProvider
 
 
 pytestmark = pytest.mark.django_db
+
+
+class TestEmbeddingProvider:
+    DIMENSION = 8
+
+    def embed_texts(self, texts):
+        embeddings = []
+        for text in texts:
+            vector = [float((ord(c) % 10)) for c in text[: self.DIMENSION]]
+            vector += [0.0] * (self.DIMENSION - len(vector))
+            embeddings.append(vector)
+        return embeddings
 
 
 @pytest.fixture
@@ -46,7 +57,7 @@ def chunks(document):
 
 
 def test_document_embedder_embeds_all_pending_chunks(document, chunks):
-    provider = FakeEmbeddingProvider()
+    provider = TestEmbeddingProvider()
     chunk_embedder = ChunkEmbedder(provider, model_name="fake-model")
     document_embedder = DocumentEmbedder(chunk_embedder)
 
@@ -62,7 +73,7 @@ def test_document_embedder_embeds_all_pending_chunks(document, chunks):
 
 
 def test_document_embedder_returns_zero_when_no_pending_chunks(document, chunks):
-    provider = FakeEmbeddingProvider()
+    provider = TestEmbeddingProvider()
     chunk_embedder = ChunkEmbedder(provider, model_name="fake-model")
     document_embedder = DocumentEmbedder(chunk_embedder)
 

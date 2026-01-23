@@ -11,9 +11,25 @@ from .forms import DocumentUploadForm
 
 from documents.services.document_processor import process_document
 from documents.services.ask.ask_service import AskService
-from documents.services.embeddings.embedding_provider import FakeEmbeddingProvider
+from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
+from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.retriever import Retriever
-from documents.services.llm.fake_llm_provider import FakeLLMProvider
+from documents.services.llm.openai_llm_provider import OpenAILLMProvider
+
+
+def _build_ask_service() -> AskService:
+    embedding_provider = OpenAIEmbeddingProvider()
+    llm_provider = OpenAILLMProvider()
+    query_rewriter = QueryRewriter()
+    retriever = Retriever(
+        embedding_provider,
+        query_rewriter=query_rewriter,
+    )
+
+    return AskService(
+        retriever=retriever,
+        llm_provider=llm_provider,
+    )
 
 
 @login_required
@@ -91,52 +107,56 @@ def ask_view(request):
         return JsonResponse({"error": "Missing 'question'"}, status=400)
 
     # Wiring del RAG
-    embedding_provider = FakeEmbeddingProvider()
-    retriever = Retriever(embedding_provider)
-    llm_provider = FakeLLMProvider()
+    ask_service = _build_ask_service()
 
-    ask_service = AskService(
-        retriever=retriever,
-        llm_provider=llm_provider,
-    )
-
-    result = ask_service.ask(question=question)
+    result = ask_service.ask(question=question, top_k=6)
 
     return JsonResponse(result, status=200)
 
-
-from django.shortcuts import redirect
-
 @login_required
 def ask_page(request):
+    if request.GET.get("clear") == "1":
+        request.session.pop("chat_history", None)
+        return redirect("documents:ask_ui")
+
     if request.method == "POST":
+        if request.POST.get("clear") == "1":
+            request.session.pop("chat_history", None)
+            return redirect("documents:ask_ui")
+
         question = request.POST.get("question", "").strip()
 
         if question:
-            embedding_provider = FakeEmbeddingProvider()
-            retriever = Retriever(embedding_provider)
-            llm_provider = FakeLLMProvider()
+            ask_service = _build_ask_service()
 
-            ask_service = AskService(
-                retriever=retriever,
-                llm_provider=llm_provider,
-            )
-
-            result = ask_service.ask(question=question)
+            result = ask_service.ask(question=question, top_k=6)
 
             # Guardamos la respuesta en sesión (temporal)
-            request.session["ask_answer"] = result
+            history = request.session.get("chat_history", [])
+            if not isinstance(history, list):
+                history = []
+
+            history.append(
+                {
+                    "question": question,
+                    "answer": result.get("answer"),
+                    "chunks_used": result.get("chunks_used"),
+                }
+            )
+            request.session["chat_history"] = history
 
         return redirect("documents:ask_ui")
 
     # GET
-    answer = request.session.pop("ask_answer", None)
+    history = request.session.get("chat_history", [])
+    if not isinstance(history, list):
+        history = []
 
     return render(
         request,
         "documents/ask.html",
         {
-            "answer": answer,
+            "history": history,
             "question": "",
         },
     )
