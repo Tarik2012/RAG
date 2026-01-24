@@ -40,6 +40,8 @@ def document(user):
         file=file,
         content_type="text/plain",
         size=5,
+        status="processed",
+        is_active=True,
     )
 
 
@@ -57,7 +59,7 @@ def embedded_chunks(document):
         )
 
 
-def test_ask_service_returns_answer_and_context(embedded_chunks):
+def test_ask_service_returns_answer_and_context(document, embedded_chunks):
     retriever = Retriever(TestEmbeddingProvider())
     llm = TestLLMProvider()
 
@@ -66,7 +68,7 @@ def test_ask_service_returns_answer_and_context(embedded_chunks):
         llm_provider=llm,
     )
 
-    result = ask_service.ask(question="alpha")
+    result = ask_service.ask(question="alpha", user=document.owner)
 
     assert "answer" in result
     assert result["answer"].startswith("FAKE ANSWER")

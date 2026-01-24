@@ -47,22 +47,29 @@
 
         <!-- Navigation -->
         <nav class="hidden md:flex items-center space-x-6 text-sm">
-          <a href="{% url 'core:home' %}" class="text-slate-300 hover:text-white transition">
+          <a
+            href="{% url 'core:home' %}"
+            class="text-slate-300 hover:text-white transition"
+          >
             Home
           </a>
-          <a href="{% url 'documents:list' %}" class="text-slate-300 hover:text-white transition">
+
+          <a
+            href="{% url 'documents:list' %}"
+            class="text-slate-300 hover:text-white transition"
+          >
             Documents
           </a>
+
           <a
             href="{% url 'documents:ask_ui' %}"
             class="text-slate-300 hover:text-white transition"
           >
             Ask AI
           </a>
-
         </nav>
 
-        <!-- Auth (ADMIN ONLY, SIMPLE) -->
+        <!-- Auth -->
         <div class="flex items-center space-x-4 text-sm">
           <span class="hidden sm:inline text-slate-400">
             Internal platform
@@ -74,14 +81,14 @@
             </span>
 
             <a
-              href="/admin/logout/?next=/"
+              href="{% url 'logout' %}?next=/"
               class="text-slate-300 hover:text-white transition"
             >
               Cerrar sesión
             </a>
           {% else %}
             <a
-              href="/admin/login/?next=/"
+              href="{% url 'login' %}?next=/"
               class="text-slate-300 hover:text-white transition"
             >
               Conectarse

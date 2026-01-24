@@ -17,6 +17,8 @@ def document(user):
         file=file,
         content_type="text/plain",
         size=5,
+        status="processed",
+        is_active=True,
     )
 
 
@@ -43,7 +45,8 @@ def test_retriever_returns_top_k_chunks(embedded_chunks):
     provider = TestEmbeddingProvider()
     retriever = Retriever(provider)
 
-    results = retriever.retrieve(query="alpha", top_k=2)
+    document = embedded_chunks[0].document
+    results = retriever.retrieve(query="alpha", top_k=2, user=document.owner)
 
     assert len(results) == 2
     assert all(isinstance(score, float) for _, score in results)

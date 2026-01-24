@@ -3,6 +3,7 @@ from .views import (
     document_list,
     document_upload,
     document_delete,
+    document_activate,
     ask_view,
     ask_page,
 )
@@ -13,6 +14,9 @@ urlpatterns = [
     path("", document_list, name="list"),
     path("upload/", document_upload, name="upload"),
     path("delete/<int:pk>/", document_delete, name="delete"),
+
+    # activar documento antiguo
+    path("activate/<int:pk>/", document_activate, name="activate"),
 
     # API (RAG)
     path("ask/", ask_view, name="ask"),

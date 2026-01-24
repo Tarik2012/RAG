@@ -23,12 +23,14 @@ class DummyQueryRewriter:
         return question
 
 
-def test_ask_view_returns_200(client, monkeypatch):
+def test_ask_view_returns_200(client, monkeypatch, user):
     monkeypatch.setattr(views, "OpenAIEmbeddingProvider", DummyEmbeddingProvider)
     monkeypatch.setattr(views, "OpenAILLMProvider", DummyLLMProvider)
     monkeypatch.setattr(views, "QueryRewriter", DummyQueryRewriter)
 
     url = reverse("documents:ask")
+
+    client.force_login(user)
 
     response = client.post(
         url,
@@ -43,8 +45,10 @@ def test_ask_view_returns_200(client, monkeypatch):
     assert "question" in data
 
 
-def test_ask_view_missing_question_returns_400(client):
+def test_ask_view_missing_question_returns_400(client, user):
     url = reverse("documents:ask")
+
+    client.force_login(user)
 
     response = client.post(
         url,

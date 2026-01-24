@@ -1,0 +1,76 @@
+{% extends "core/base.html" %}
+
+{% block title %}Sign in | TariTech{% endblock %}
+
+{% block content %}
+<div class="flex justify-center items-center min-h-[60vh]">
+
+  <section class="w-full max-w-sm bg-white border rounded-lg shadow-sm px-8 py-10">
+
+    <header class="mb-8 text-center">
+      <h1 class="text-xl font-semibold tracking-tight text-gray-900">
+        Sign in
+      </h1>
+      <p class="mt-2 text-sm text-gray-500">
+        Internal access only
+      </p>
+    </header>
+
+    {% if form.errors %}
+      <div class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        Invalid username or password.
+      </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'login' %}" class="space-y-5">
+      {% csrf_token %}
+
+      <div>
+        <label
+          for="id_username"
+          class="block text-xs font-medium uppercase tracking-wide text-gray-600 mb-1"
+        >
+          Username
+        </label>
+        <input
+          type="text"
+          name="username"
+          id="id_username"
+          required
+          autofocus
+          class="block w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-accent focus:ring-accent"
+        />
+      </div>
+
+      <div>
+        <label
+          for="id_password"
+          class="block text-xs font-medium uppercase tracking-wide text-gray-600 mb-1"
+        >
+          Password
+        </label>
+        <input
+          type="password"
+          name="password"
+          id="id_password"
+          required
+          class="block w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-accent focus:ring-accent"
+        />
+      </div>
+
+      {% if next %}
+        <input type="hidden" name="next" value="{{ next }}">
+      {% endif %}
+
+      <button
+        type="submit"
+        class="w-full rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition"
+      >
+        Sign in
+      </button>
+    </form>
+
+  </section>
+
+</div>
+{% endblock %}
