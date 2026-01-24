@@ -1,0 +1,67 @@
+1. Activación atómica
+
+Envolver Document.set_active_for_user() en transaction.atomic()
+
+Usar select_for_update() sobre documentos del usuario
+
+Ejecutar activación solo tras status="processed"
+
+Mover activación al final exitoso de process_document_task
+
+2. Umbral de similitud
+
+Definir constante MIN_SIMILARITY
+
+Filtrar chunks por similarity >= MIN_SIMILARITY
+
+Si no hay chunks válidos → no llamar al LLM
+
+Devolver respuesta de rechazo
+
+3. Logging de retrieval
+
+Guardar document_id
+
+Guardar chunk_ids
+
+Guardar similarity_scores
+
+Asociar a user_id
+
+4. Celery: idempotencia y retries
+
+Añadir autoretry_for
+
+Configurar retry_backoff
+
+Verificar estado antes de procesar
+
+Evitar reprocesar documentos processed
+
+5. Observabilidad mínima
+
+Log de duración de:
+
+extracción
+
+chunking
+
+embeddings
+
+Log de número de chunks
+
+Log de llamadas al LLM
+
+6. Rate limiting
+
+Límite por usuario en /ask
+
+Límite por usuario en /upload
+
+7. pgvector
+
+Migrar embeddings a VectorField
+
+Similaridad en consulta SQL
+
+Eliminar cosine similarity en Python

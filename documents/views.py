@@ -4,7 +4,6 @@ from django.http import JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
 
 from .models import Document
 from .forms import DocumentUploadForm
@@ -63,7 +62,7 @@ def document_upload(request):
 
             doc.save()
 
-            # Ingestión ASÍNCRONA (Celery)
+            # 👉 ingesta asíncrona
             process_document_task.delay(doc.id)
 
             return redirect("documents:list")
@@ -75,6 +74,23 @@ def document_upload(request):
         "documents/document_upload.html",
         {"form": form},
     )
+
+
+@login_required
+@require_POST
+def document_activate(request, pk):
+    """
+    Marca un documento antiguo como activo.
+    """
+    document = get_object_or_404(
+        Document,
+        pk=pk,
+        owner=request.user,
+    )
+
+    Document.set_active_for_user(document=document)
+
+    return redirect("documents:list")
 
 
 @login_required
@@ -92,13 +108,12 @@ def document_delete(request, pk):
     return redirect("documents:list")
 
 
-@csrf_exempt
+@login_required
 @require_POST
 def ask_view(request):
     """
     Endpoint JSON para preguntas RAG.
     """
-
     try:
         payload = json.loads(request.body)
     except json.JSONDecodeError:
@@ -109,7 +124,11 @@ def ask_view(request):
         return JsonResponse({"error": "Missing 'question'"}, status=400)
 
     ask_service = _build_ask_service()
-    result = ask_service.ask(question=question, top_k=6)
+    result = ask_service.ask(
+        question=question,
+        user=request.user,
+        top_k=6,
+    )
 
     return JsonResponse(result, status=200)
 
@@ -129,7 +148,11 @@ def ask_page(request):
 
         if question:
             ask_service = _build_ask_service()
-            result = ask_service.ask(question=question, top_k=6)
+            result = ask_service.ask(
+                question=question,
+                user=request.user,
+                top_k=6,
+            )
 
             history = request.session.get("chat_history", [])
             if not isinstance(history, list):

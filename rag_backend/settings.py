@@ -52,7 +52,7 @@ ROOT_URLCONF = "rag_backend.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],  # 🔴 FIX DEFINITIVO
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -102,20 +102,25 @@ USE_TZ = True
 # =========================
 # Static files
 # =========================
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+
+# =========================
+# Media files
+# =========================
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# =========================
+# Auth redirects
+# =========================
+LOGIN_URL = "/accounts/login/"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
 
 # =========================
 # Default PK
 # =========================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-
-# =========================
-# Media files (uploads)
-# =========================
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
 
 # =========================
 # OpenAI / RAG settings
@@ -124,7 +129,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 RAG_LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "fake")
 
-
+# =========================
+# Celery
+# =========================
 CELERY_BROKER_URL = "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"

@@ -15,6 +15,7 @@ def process_document_task(self, document_id: int):
     try:
         with transaction.atomic():
             process_document(document)
+        Document.set_active_for_user(document=document)
 
     except Exception:
         # process_document ya marca el documento como "failed"

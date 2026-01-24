@@ -30,10 +30,25 @@ class Document(models.Model):
         default="uploaded",
     )
 
+    # 👉 Documento activo (clave del diseño)
+    is_active = models.BooleanField(default=False, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return self.original_name
+
+    @classmethod
+    def set_active_for_user(cls, *, document: "Document"):
+        """
+        Marca este documento como activo y desactiva los demás del usuario.
+        """
+        cls.objects.filter(owner=document.owner, is_active=True).exclude(
+            id=document.id
+        ).update(is_active=False)
+
+        document.is_active = True
+        document.save(update_fields=["is_active"])
 
 
 class DocumentChunk(models.Model):
@@ -53,10 +68,8 @@ class DocumentChunk(models.Model):
     order = models.PositiveIntegerField()
     text = models.TextField()
 
-    # Idempotencia para embeddings
     text_hash = models.CharField(max_length=64, db_index=True)
 
-    # Embedding (por ahora en JSON; más adelante migraremos a pgvector)
     embedding = models.JSONField(null=True, blank=True)
 
     embedding_status = models.CharField(
@@ -93,7 +106,6 @@ class DocumentChunk(models.Model):
             update_fields.add("text_hash")
             kwargs["update_fields"] = list(update_fields)
 
-        # Mantener text_hash siempre consistente con text
         self.text_hash = self.compute_text_hash()
         super().save(*args, **kwargs)
 
