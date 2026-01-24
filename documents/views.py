@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import Document
 from .forms import DocumentUploadForm
 
-from documents.services.document_processor import process_document
+from documents.tasks import process_document_task
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
 from documents.services.retrieval.query_rewriter import QueryRewriter
@@ -21,8 +21,9 @@ def _build_ask_service() -> AskService:
     embedding_provider = OpenAIEmbeddingProvider()
     llm_provider = OpenAILLMProvider()
     query_rewriter = QueryRewriter()
+
     retriever = Retriever(
-        embedding_provider,
+        embedding_provider=embedding_provider,
         query_rewriter=query_rewriter,
     )
 
@@ -39,6 +40,7 @@ def document_list(request):
         .filter(owner=request.user)
         .order_by("-created_at")
     )
+
     return render(
         request,
         "documents/document_list.html",
@@ -61,8 +63,8 @@ def document_upload(request):
 
             doc.save()
 
-            # Ingesta RAG (sync por ahora)
-            process_document(doc)
+            # Ingestión ASÍNCRONA (Celery)
+            process_document_task.delay(doc.id)
 
             return redirect("documents:list")
     else:
@@ -94,7 +96,7 @@ def document_delete(request, pk):
 @require_POST
 def ask_view(request):
     """
-    Endpoint para hacer preguntas al sistema RAG.
+    Endpoint JSON para preguntas RAG.
     """
 
     try:
@@ -106,12 +108,11 @@ def ask_view(request):
     if not question:
         return JsonResponse({"error": "Missing 'question'"}, status=400)
 
-    # Wiring del RAG
     ask_service = _build_ask_service()
-
     result = ask_service.ask(question=question, top_k=6)
 
     return JsonResponse(result, status=200)
+
 
 @login_required
 def ask_page(request):
@@ -128,10 +129,8 @@ def ask_page(request):
 
         if question:
             ask_service = _build_ask_service()
-
             result = ask_service.ask(question=question, top_k=6)
 
-            # Guardamos la respuesta en sesión (temporal)
             history = request.session.get("chat_history", [])
             if not isinstance(history, list):
                 history = []
@@ -143,11 +142,11 @@ def ask_page(request):
                     "chunks_used": result.get("chunks_used"),
                 }
             )
+
             request.session["chat_history"] = history
 
         return redirect("documents:ask_ui")
 
-    # GET
     history = request.session.get("chat_history", [])
     if not isinstance(history, list):
         history = []

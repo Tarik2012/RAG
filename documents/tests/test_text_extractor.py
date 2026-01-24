@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch
+from pathlib import Path
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -54,7 +55,7 @@ def test_pdf_happy_path_returns_extracted_text(document_factory):
         result = extract_text_from_document(document)
 
     assert result == "hello world"
-    mock_extract.assert_called_once_with(document.file.path)
+    mock_extract.assert_called_once_with(Path(document.file.path))
 
 
 def test_pdf_empty_extraction_returns_empty_string(document_factory):

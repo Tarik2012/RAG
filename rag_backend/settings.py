@@ -123,3 +123,8 @@ MEDIA_ROOT = BASE_DIR / "media"
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 RAG_LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "fake")
+
+
+CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
