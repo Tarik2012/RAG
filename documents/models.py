@@ -1,5 +1,6 @@
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 import hashlib
@@ -30,10 +31,19 @@ class Document(models.Model):
         default="uploaded",
     )
 
-    # 👉 Documento activo (clave del diseño)
+    #  Documento activo (clave del diseño)
     is_active = models.BooleanField(default=False, db_index=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner"],
+                condition=Q(is_active=True),
+                name="unique_active_document_per_owner",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.original_name
@@ -43,12 +53,20 @@ class Document(models.Model):
         """
         Marca este documento como activo y desactiva los demás del usuario.
         """
-        cls.objects.filter(owner=document.owner, is_active=True).exclude(
-            id=document.id
-        ).update(is_active=False)
+        with transaction.atomic():
+            locked_queryset = cls.objects.select_for_update().filter(
+                owner=document.owner
+            )
+            locked_document = locked_queryset.get(id=document.id)
 
-        document.is_active = True
-        document.save(update_fields=["is_active"])
+            if locked_document.status != "processed":
+                raise ValueError("Only processed documents can be activated.")
+
+            locked_queryset.exclude(id=locked_document.id).update(is_active=False)
+
+            if not locked_document.is_active:
+                locked_document.is_active = True
+                locked_document.save(update_fields=["is_active"])
 
 
 class DocumentChunk(models.Model):
