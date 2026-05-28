@@ -180,12 +180,9 @@ def ask_page(request):
         question = request.POST.get("question", "").strip()
 
         if question:
-            ask_service = _build_ask_service()
-            result = ask_service.ask(
-                question=question,
-                user=request.user,
-                top_k=6,
-            )
+            agent = _build_agent_service(request.user)
+            result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+            answer = result["messages"][-1].content
 
             history = request.session.get("chat_history", [])
             if not isinstance(history, list):
@@ -194,8 +191,7 @@ def ask_page(request):
             history.append(
                 {
                     "question": question,
-                    "answer": result.get("answer"),
-                    "chunks_used": result.get("chunks_used"),
+                    "answer": answer,
                 }
             )
 

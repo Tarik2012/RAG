@@ -37,4 +37,4 @@ def build_agent(user):
     tavily_tool = TavilySearchResults(max_results=3)
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     tools = [rag_tool, tavily_tool]
-    return create_react_agent(llm, tools)
+    return create_react_agent(llm, tools, debug=True)
