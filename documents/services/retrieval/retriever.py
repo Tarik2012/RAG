@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple
 from documents.models import Document, DocumentChunk
 from documents.services.embeddings.embedding_provider import EmbeddingProvider
 from documents.services.retrieval.query_rewriter import QueryRewriter
+from documents.services.retrieval.reranker import CrossEncoderReranker
 
 
 def cosine_similarity(a: List[float], b: List[float]) -> float:
@@ -29,9 +30,11 @@ class Retriever:
         self,
         embedding_provider: EmbeddingProvider,
         query_rewriter: Optional[QueryRewriter] = None,
+        reranker: Optional[CrossEncoderReranker] = None,
     ):
         self.embedding_provider = embedding_provider
         self.query_rewriter = query_rewriter
+        self.reranker = reranker
 
     def retrieve(
         self,
@@ -79,5 +82,24 @@ class Retriever:
 
         # 4. Ordenar por score descendente
         scored_chunks.sort(key=lambda x: x[1], reverse=True)
+
+        if self.reranker is not None:
+            candidate_chunks = scored_chunks[:20]
+            texts = [chunk.text for chunk, _ in candidate_chunks]
+            reranked_texts = self.reranker.rerank(rewritten_query, texts)
+
+            remaining_by_text: dict[str, List[Tuple[DocumentChunk, float]]] = {}
+            for chunk, score in candidate_chunks:
+                remaining_by_text.setdefault(chunk.text, []).append((chunk, score))
+
+            reranked_chunks: List[Tuple[DocumentChunk, float]] = []
+            for text in reranked_texts:
+                matches = remaining_by_text.get(text)
+                if not matches:
+                    continue
+                chunk, _ = matches.pop(0)
+                reranked_chunks.append((chunk, 1.0))
+
+            return reranked_chunks[:top_k]
 
         return scored_chunks[:top_k]

@@ -9,9 +9,11 @@ from .models import Document
 from .forms import DocumentUploadForm
 
 from documents.tasks import process_document_task
+from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
 from documents.services.retrieval.query_rewriter import QueryRewriter
+from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
 from documents.services.llm.openai_llm_provider import OpenAILLMProvider
 
@@ -20,16 +22,22 @@ def _build_ask_service() -> AskService:
     embedding_provider = OpenAIEmbeddingProvider()
     llm_provider = OpenAILLMProvider()
     query_rewriter = QueryRewriter()
+    reranker = CrossEncoderReranker()
 
     retriever = Retriever(
         embedding_provider=embedding_provider,
         query_rewriter=query_rewriter,
+        reranker=reranker,
     )
 
     return AskService(
         retriever=retriever,
         llm_provider=llm_provider,
     )
+
+
+def _build_agent_service(user):
+    return build_agent(user)
 
 
 @login_required
@@ -131,6 +139,31 @@ def ask_view(request):
     )
 
     return JsonResponse(result, status=200)
+
+
+@login_required
+@require_POST
+def agent_view(request):
+    try:
+        payload = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    question = payload.get("question")
+    if not question:
+        return JsonResponse({"error": "Missing 'question'"}, status=400)
+
+    agent = _build_agent_service(request.user)
+    result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+    answer = result["messages"][-1].content
+
+    return JsonResponse(
+        {
+            "question": question,
+            "answer": answer,
+        },
+        status=200,
+    )
 
 
 @login_required

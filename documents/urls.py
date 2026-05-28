@@ -4,6 +4,7 @@ from .views import (
     document_upload,
     document_delete,
     document_activate,
+    agent_view,
     ask_view,
     ask_page,
 )
@@ -20,6 +21,7 @@ urlpatterns = [
 
     # API (RAG)
     path("ask/", ask_view, name="ask"),
+    path("agent/", agent_view, name="agent"),
 
     # UI (interfaz humana)
     path("ask/ui/", ask_page, name="ask_ui"),
