@@ -36,6 +36,7 @@ INSTALLED_APPS = [
 # =========================
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -103,6 +104,7 @@ USE_TZ = True
 # Static files
 # =========================
 STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # =========================
 # Media files
@@ -132,6 +134,6 @@ RAG_LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "fake")
 # =========================
 # Celery
 # =========================
-CELERY_BROKER_URL = "redis://localhost:6379/0"
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"

@@ -1,3 +1,4 @@
+from django.conf import settings
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -9,6 +10,15 @@ from documents.services.embeddings.openai_embedding_provider import (
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
+
+_reranker = CrossEncoderReranker()
+_embedding_provider = OpenAIEmbeddingProvider()
+_query_rewriter = QueryRewriter()
+_llm = ChatOpenAI(
+    model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+    temperature=0,
+)
+_tavily_tool = TavilySearchResults(max_results=3)
 
 
 def build_rag_tool(retriever, user):
@@ -43,15 +53,14 @@ def build_code_analysis_tool(retriever, user):
 
 def build_agent(user):
     retriever = Retriever(
-        embedding_provider=OpenAIEmbeddingProvider(),
-        query_rewriter=QueryRewriter(),
-        reranker=CrossEncoderReranker(),
+        embedding_provider=_embedding_provider,
+        query_rewriter=_query_rewriter,
+        reranker=_reranker,
     )
 
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     tools = [
         build_rag_tool(retriever, user),
         build_code_analysis_tool(retriever, user),
-        TavilySearchResults(max_results=3),
+        _tavily_tool,
     ]
-    return create_react_agent(llm, tools, debug=True)
+    return create_react_agent(_llm, tools, debug=False)
