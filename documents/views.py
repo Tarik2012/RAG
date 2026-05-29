@@ -153,9 +153,12 @@ def agent_view(request):
     if not question:
         return JsonResponse({"error": "Missing 'question'"}, status=400)
 
-    agent = _build_agent_service(request.user)
-    result = agent.invoke({"messages": [{"role": "user", "content": question}]})
-    answer = result["messages"][-1].content
+    try:
+        agent = _build_agent_service(request.user)
+        result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+        answer = result["messages"][-1].content
+    except Exception as e:
+        answer = "Lo siento, ha ocurrido un error procesando tu pregunta. Por favor inténtalo de nuevo."
 
     return JsonResponse(
         {
@@ -180,9 +183,12 @@ def ask_page(request):
         question = request.POST.get("question", "").strip()
 
         if question:
-            agent = _build_agent_service(request.user)
-            result = agent.invoke({"messages": [{"role": "user", "content": question}]})
-            answer = result["messages"][-1].content
+            try:
+                agent = _build_agent_service(request.user)
+                result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+                answer = result["messages"][-1].content
+            except Exception as e:
+                answer = "Lo siento, ha ocurrido un error procesando tu pregunta. Por favor inténtalo de nuevo."
 
             history = request.session.get("chat_history", [])
             if not isinstance(history, list):

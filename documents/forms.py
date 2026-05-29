@@ -34,6 +34,7 @@ class DocumentUploadForm(forms.ModelForm):
                     "file:font-medium "
                     "file:text-gray-700 "
                     "hover:file:bg-gray-200"
-                )
+                ),
+                "accept": ".pdf,.csv,.py,.js,.ts,.java,.cs,.cpp,.go,.rb,.php,.swift,.kt,.html,.htm,.css,.json,.xml,.yaml,.yml,.md,.txt,.rst",
             }),
         }

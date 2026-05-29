@@ -24,6 +24,14 @@ def extract_text_from_document(document) -> str:
     if content_type.startswith("text/csv") or file_path.suffix.lower() == ".csv":
         return _extract_text_from_csv(file_path)
 
+    CODE_EXTENSIONS = {
+        ".py", ".js", ".ts", ".java", ".cs", ".cpp", ".go", ".rb",
+        ".php", ".swift", ".kt", ".html", ".htm", ".css",
+        ".json", ".xml", ".yaml", ".yml", ".md", ".txt", ".rst"
+    }
+    if file_path.suffix.lower() in CODE_EXTENSIONS:
+        return _extract_text_from_code(file_path)
+
     # Tipo no soportado
     return ""
 
@@ -82,6 +90,11 @@ def _extract_text_from_csv(file_path: Path) -> str:
                 rows_text.append(sentence)
 
     return "\n".join(rows_text)
+
+
+def _extract_text_from_code(file_path: Path) -> str:
+    with open(file_path, encoding="utf-8", errors="ignore") as f:
+        return f.read()
 
 
 def _normalize_text(text: str) -> str:
