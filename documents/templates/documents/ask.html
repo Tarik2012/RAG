@@ -3,6 +3,7 @@
 {% block title %}Ask AI | TariTech{% endblock %}
 
 {% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <div class="max-w-4xl mx-auto space-y-8">
 
   <!-- Header -->
@@ -84,8 +85,10 @@
 
             <div>
               <div class="text-xs font-medium text-gray-400">AI</div>
-              <div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-800 whitespace-pre-wrap">
-{{ item.answer }}
+              <div id="answer-{{ forloop.counter }}" class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-800 prose max-w-none"></div>
+              <script>
+                document.getElementById('answer-{{ forloop.counter }}').innerHTML = marked.parse(`{{ item.answer|escapejs }}`);
+              </script>
               </div>
             </div>
           </div>
