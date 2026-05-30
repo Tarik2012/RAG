@@ -1,21 +1,24 @@
+import logging
 import json
 
-from django.http import JsonResponse
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+from django_ratelimit.decorators import ratelimit
 
-from .models import Document
 from .forms import DocumentUploadForm
-
-from documents.tasks import process_document_task
+from .models import Document
 from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
+from documents.services.llm.openai_llm_provider import OpenAILLMProvider
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
-from documents.services.llm.openai_llm_provider import OpenAILLMProvider
+from documents.tasks import process_document_task
+
+logger = logging.getLogger(__name__)
 
 
 def _build_ask_service() -> AskService:
@@ -42,11 +45,7 @@ def _build_agent_service(user):
 
 @login_required
 def document_list(request):
-    documents = (
-        Document.objects
-        .filter(owner=request.user)
-        .order_by("-created_at")
-    )
+    documents = Document.objects.filter(owner=request.user).order_by("-created_at")
 
     return render(
         request,
@@ -69,8 +68,6 @@ def document_upload(request):
             doc.size = uploaded_file.size
 
             doc.save()
-
-            # 👉 ingesta asíncrona
             process_document_task.delay(doc.id)
 
             return redirect("documents:list")
@@ -87,9 +84,6 @@ def document_upload(request):
 @login_required
 @require_POST
 def document_activate(request, pk):
-    """
-    Marca un documento antiguo como activo.
-    """
     document = get_object_or_404(
         Document,
         pk=pk,
@@ -117,11 +111,9 @@ def document_delete(request, pk):
 
 
 @login_required
+@ratelimit(key="user", rate="20/m", block=True)
 @require_POST
 def ask_view(request):
-    """
-    Endpoint JSON para preguntas RAG.
-    """
     try:
         payload = json.loads(request.body)
     except json.JSONDecodeError:
@@ -131,17 +123,25 @@ def ask_view(request):
     if not question:
         return JsonResponse({"error": "Missing 'question'"}, status=400)
 
-    ask_service = _build_ask_service()
-    result = ask_service.ask(
-        question=question,
-        user=request.user,
-        top_k=6,
-    )
+    try:
+        ask_service = _build_ask_service()
+        result = ask_service.ask(
+            question=question,
+            user=request.user,
+            top_k=6,
+        )
+    except Exception:
+        logger.exception("Agent failed for user %s", request.user.id)
+        result = {
+            "question": question,
+            "answer": "Lo siento...",
+        }
 
     return JsonResponse(result, status=200)
 
 
 @login_required
+@ratelimit(key="user", rate="20/m", block=True)
 @require_POST
 def agent_view(request):
     try:
@@ -157,8 +157,9 @@ def agent_view(request):
         agent = _build_agent_service(request.user)
         result = agent.invoke({"messages": [{"role": "user", "content": question}]})
         answer = result["messages"][-1].content
-    except Exception as e:
-        answer = "Lo siento, ha ocurrido un error procesando tu pregunta. Por favor inténtalo de nuevo."
+    except Exception:
+        logger.exception("Agent failed for user %s", request.user.id)
+        answer = "Lo siento..."
 
     return JsonResponse(
         {
@@ -187,8 +188,8 @@ def ask_page(request):
                 agent = _build_agent_service(request.user)
                 result = agent.invoke({"messages": [{"role": "user", "content": question}]})
                 answer = result["messages"][-1].content
-            except Exception as e:
-                answer = "Lo siento, ha ocurrido un error procesando tu pregunta. Por favor inténtalo de nuevo."
+            except Exception:
+                answer = "Lo siento..."
 
             history = request.session.get("chat_history", [])
             if not isinstance(history, list):

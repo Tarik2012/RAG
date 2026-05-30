@@ -23,6 +23,7 @@ cryptography==48.0.0
 distro==1.9.0
 Django==4.2.27
 djangorestframework==3.16.1
+django-ratelimit==4.1.0
 django-storages
 docstring_parser==0.18.0
 et_xmlfile==2.0.0
