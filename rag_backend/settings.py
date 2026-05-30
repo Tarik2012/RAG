@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "storages",
 
     # Local apps
     "core",
@@ -111,6 +112,27 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Media files
 # =========================
 MEDIA_URL = "/media/"
+
+# S3 Storage for Railway Bucket
+if os.getenv("AWS_S3_BUCKET_NAME"):
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3.S3Storage",
+            "OPTIONS": {
+                "bucket_name": os.getenv("AWS_S3_BUCKET_NAME"),
+                "region_name": os.getenv("AWS_DEFAULT_REGION", "auto"),
+                "endpoint_url": os.getenv("AWS_ENDPOINT_URL"),
+                "access_key": os.getenv("AWS_ACCESS_KEY_ID"),
+                "secret_key": os.getenv("AWS_SECRET_ACCESS_KEY"),
+                "file_overwrite": False,
+                "default_acl": None,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+
 MEDIA_ROOT = BASE_DIR / "media"
 
 # =========================

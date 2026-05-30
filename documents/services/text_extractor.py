@@ -1,6 +1,8 @@
-from pypdf import PdfReader
-import csv
+from io import TextIOWrapper
 from pathlib import Path
+import csv
+
+from pypdf import PdfReader
 
 
 def extract_text_from_document(document) -> str:
@@ -16,46 +18,51 @@ def extract_text_from_document(document) -> str:
     """
 
     content_type = (document.content_type or "").lower()
-    file_path = Path(document.file.path)
+    file_name = Path(document.file.name or "")
 
     if content_type.startswith("application/pdf"):
-        return _extract_text_from_pdf(file_path)
+        return _extract_text_from_pdf(document.file)
 
-    if content_type.startswith("text/csv") or file_path.suffix.lower() == ".csv":
-        return _extract_text_from_csv(file_path)
+    if content_type.startswith("text/csv") or file_name.suffix.lower() == ".csv":
+        return _extract_text_from_csv(document.file)
 
-    CODE_EXTENSIONS = {
+    code_extensions = {
         ".py", ".js", ".ts", ".java", ".cs", ".cpp", ".go", ".rb",
         ".php", ".swift", ".kt", ".html", ".htm", ".css",
-        ".json", ".xml", ".yaml", ".yml", ".md", ".txt", ".rst"
+        ".json", ".xml", ".yaml", ".yml", ".md", ".txt", ".rst",
     }
-    if file_path.suffix.lower() in CODE_EXTENSIONS:
-        return _extract_text_from_code(file_path)
+    if file_name.suffix.lower() in code_extensions:
+        return _extract_text_from_code(document.file)
 
     # Tipo no soportado
     return ""
 
 
-def _extract_text_from_pdf(file_path: Path) -> str:
+def _extract_text_from_pdf(file_obj) -> str:
     """
     Extrae texto de un PDF con capa de texto.
     No realiza OCR.
     """
 
-    reader = PdfReader(str(file_path))
-    pages_text: list[str] = []
+    file_obj.open("rb")
+    try:
+        file_obj.seek(0)
+        reader = PdfReader(file_obj)
+        pages_text: list[str] = []
 
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            cleaned = _normalize_text(text)
-            if cleaned:
-                pages_text.append(cleaned)
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                cleaned = _normalize_text(text)
+                if cleaned:
+                    pages_text.append(cleaned)
 
-    return "\n".join(pages_text)
+        return "\n".join(pages_text)
+    finally:
+        file_obj.close()
 
 
-def _extract_text_from_csv(file_path: Path) -> str:
+def _extract_text_from_csv(file_obj) -> str:
     """
     Convierte un CSV en texto narrativo embeddable.
 
@@ -64,9 +71,13 @@ def _extract_text_from_csv(file_path: Path) -> str:
     """
 
     rows_text: list[str] = []
+    text_stream = None
 
-    with open(file_path, newline="", encoding="utf-8", errors="ignore") as f:
-        reader = csv.DictReader(f)
+    file_obj.open("rb")
+    try:
+        file_obj.seek(0)
+        text_stream = TextIOWrapper(file_obj, encoding="utf-8", errors="ignore", newline="")
+        reader = csv.DictReader(text_stream)
 
         if not reader.fieldnames:
             return ""
@@ -89,12 +100,20 @@ def _extract_text_from_csv(file_path: Path) -> str:
                 sentence = ". ".join(parts) + "."
                 rows_text.append(sentence)
 
-    return "\n".join(rows_text)
+        return "\n".join(rows_text)
+    finally:
+        if text_stream is not None:
+            text_stream.detach()
+        file_obj.close()
 
 
-def _extract_text_from_code(file_path: Path) -> str:
-    with open(file_path, encoding="utf-8", errors="ignore") as f:
-        return f.read()
+def _extract_text_from_code(file_obj) -> str:
+    file_obj.open("rb")
+    try:
+        file_obj.seek(0)
+        return file_obj.read().decode("utf-8", errors="ignore")
+    finally:
+        file_obj.close()
 
 
 def _normalize_text(text: str) -> str:
