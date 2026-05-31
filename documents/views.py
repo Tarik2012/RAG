@@ -1,5 +1,6 @@
 import logging
 import json
+from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -19,6 +20,11 @@ from documents.services.retrieval.retriever import Retriever
 from documents.tasks import process_document_task
 
 logger = logging.getLogger(__name__)
+CODE_EXTENSIONS = {
+    ".py", ".js", ".ts", ".java", ".cs", ".cpp", ".go", ".rb",
+    ".php", ".swift", ".kt", ".html", ".htm", ".css",
+    ".json", ".xml", ".yaml", ".yml", ".md", ".txt", ".rst",
+}
 
 
 def _build_ask_service() -> AskService:
@@ -41,6 +47,71 @@ def _build_ask_service() -> AskService:
 
 def _build_agent_service(user):
     return build_agent(user)
+
+
+def _get_active_document(user):
+    return Document.objects.filter(
+        owner=user,
+        is_active=True,
+        status="processed",
+    ).first()
+
+
+def _build_agent_messages(*, user, question: str) -> list[dict[str, str]]:
+    active_document = _get_active_document(user)
+    if active_document is None:
+        system_content = (
+            "No hay un documento activo procesado para este usuario. "
+            "Si necesitas contenido del documento, la herramienta puede no encontrar resultados."
+        )
+    else:
+        source_name = active_document.original_name or active_document.file.name or ""
+        extension = Path(source_name).suffix.lower() or "unknown"
+        content_type = active_document.content_type or "unknown"
+        is_code_document = extension in CODE_EXTENSIONS
+        document_kind = "código" if is_code_document else "documento"
+
+        system_content = (
+            f"El documento activo del usuario es '{active_document.original_name}' "
+            f"(tipo {content_type}, extensión {extension}). "
+            f"Este documento debe tratarse como {document_kind}. "
+            "Regla de enrutado: "
+            "si el documento activo es código (.py, .js, .ts, etc.) y la pregunta trata sobre "
+            "errores, mejoras, funciones, refactorización, revisión o seguridad del código, "
+            "usa analyze_code. "
+            "Si el documento activo es un documento normal (PDF, texto, CSV, etc.), usa search_document."
+        )
+
+    return [
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": question},
+    ]
+
+
+def _extract_called_tools(result) -> list[str]:
+    tool_names: list[str] = []
+
+    for message in result.get("messages", []):
+        tool_calls = getattr(message, "tool_calls", None) or []
+        for tool_call in tool_calls:
+            tool_name = tool_call.get("name")
+            if tool_name:
+                tool_names.append(tool_name)
+
+        message_type = getattr(message, "type", "")
+        message_name = getattr(message, "name", None)
+        if message_type == "tool" and message_name:
+            tool_names.append(message_name)
+
+    return list(dict.fromkeys(tool_names))
+
+
+def _append_tools_to_answer(answer: str, tool_names: list[str]) -> str:
+    if not tool_names:
+        return answer
+
+    tools_label = ", ".join(tool_names)
+    return f"{answer}\n\n🔧 Tools usadas: {tools_label}"
 
 
 @login_required
@@ -155,8 +226,10 @@ def agent_view(request):
 
     try:
         agent = _build_agent_service(request.user)
-        result = agent.invoke({"messages": [{"role": "user", "content": question}]})
-        answer = result["messages"][-1].content
+        result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
+        tool_names = _extract_called_tools(result)
+        print(">>> TOOLS CALLED:", tool_names, flush=True)
+        answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
     except Exception:
         logger.exception("Agent failed for user %s", request.user.id)
         answer = "Lo siento..."
@@ -186,8 +259,10 @@ def ask_page(request):
         if question:
             try:
                 agent = _build_agent_service(request.user)
-                result = agent.invoke({"messages": [{"role": "user", "content": question}]})
-                answer = result["messages"][-1].content
+                result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
+                tool_names = _extract_called_tools(result)
+                print(">>> TOOLS CALLED:", tool_names, flush=True)
+                answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
             except Exception:
                 answer = "Lo siento..."
 
