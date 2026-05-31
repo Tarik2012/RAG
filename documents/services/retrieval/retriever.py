@@ -82,7 +82,7 @@ class Retriever:
 
         # 4. Ordenar por score descendente
         scored_chunks.sort(key=lambda x: x[1], reverse=True)
-        scored_chunks = [(chunk, score) for chunk, score in scored_chunks if score >= 0.25]
+        scored_chunks = [(chunk, score) for chunk, score in scored_chunks if score >= 0.10]
 
         if not scored_chunks:
             return []
