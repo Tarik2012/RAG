@@ -14,13 +14,18 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.model_name = model_name
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:
+    def embed_texts(self, texts: List[str], batch_size: int = 256) -> List[List[float]]:
         if not texts:
             return []
 
-        response = self.client.embeddings.create(
-            model=self.model_name,
-            input=texts,
-        )
+        embeddings: List[List[float]] = []
 
-        return [item.embedding for item in response.data]
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start:start + batch_size]
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=batch,
+            )
+            embeddings.extend(item.embedding for item in response.data)
+
+        return embeddings
