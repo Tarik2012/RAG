@@ -11,7 +11,7 @@ pytestmark = pytest.mark.django_db
 
 
 class TestEmbeddingProvider:
-    DIMENSION = 8
+    DIMENSION = 1536
 
     def embed_texts(self, texts):
         embeddings = []
@@ -48,13 +48,15 @@ def document(user):
 @pytest.fixture
 def embedded_chunks(document):
     texts = ["alpha text", "bravo text"]
-    for i, text in enumerate(texts):
+    embeddings = TestEmbeddingProvider().embed_texts(texts)
+    for i, (text, vector) in enumerate(zip(texts, embeddings)):
         DocumentChunk.objects.create(
             document=document,
             order=i,
             text=text,
             embedding_status="embedded",
-            embedding=[1.0] * TestEmbeddingProvider.DIMENSION,
+            embedding=vector,
+            embedding_vector=vector,
             embedding_model="fake",
         )
 

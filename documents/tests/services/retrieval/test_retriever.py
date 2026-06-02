@@ -26,14 +26,16 @@ def document(user):
 def embedded_chunks(document):
     chunks = []
     texts = ["alpha text", "bravo text", "charlie text"]
+    embeddings = TestEmbeddingProvider().embed_texts(texts)
 
-    for i, text in enumerate(texts):
+    for i, (text, vector) in enumerate(zip(texts, embeddings)):
         chunk = DocumentChunk.objects.create(
             document=document,
             order=i,
             text=text,
             embedding_status="embedded",
-            embedding=[float(i + 1)] * TestEmbeddingProvider.DIMENSION,
+            embedding=vector,
+            embedding_vector=vector,
             embedding_model="fake",
         )
         chunks.append(chunk)
@@ -51,7 +53,7 @@ def test_retriever_returns_top_k_chunks(embedded_chunks):
     assert len(results) == 2
     assert all(isinstance(score, float) for _, score in results)
 class TestEmbeddingProvider:
-    DIMENSION = 8
+    DIMENSION = 1536
 
     def embed_texts(self, texts):
         embeddings = []

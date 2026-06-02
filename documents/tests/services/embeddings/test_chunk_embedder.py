@@ -9,7 +9,7 @@ pytestmark = pytest.mark.django_db
 
 
 class TestEmbeddingProvider:
-    DIMENSION = 8
+    DIMENSION = 1536
 
     def embed_texts(self, texts):
         embeddings = []
@@ -79,6 +79,7 @@ def test_embedder_saves_embeddings_for_multiple_chunks(embedded_chunks):
     expected = provider.embed_texts([chunk.text for chunk in embedded_chunks])
 
     assert [chunk.embedding for chunk in embedded_chunks] == expected
+    assert [list(chunk.embedding_vector) for chunk in embedded_chunks] == expected
 
 
 def test_embedder_sets_embedding_status_to_embedded(embedded_chunks):
@@ -98,6 +99,10 @@ def test_embedder_uses_expected_embedding_dimension(embedded_chunks):
         len(chunk.embedding) == TestEmbeddingProvider.DIMENSION
         for chunk in embedded_chunks
     )
+    assert all(
+        len(chunk.embedding_vector) == TestEmbeddingProvider.DIMENSION
+        for chunk in embedded_chunks
+    )
 
 
 def test_embedder_noops_on_empty_list(embedder, chunks):
@@ -106,6 +111,7 @@ def test_embedder_noops_on_empty_list(embedder, chunks):
     chunk = DocumentChunk.objects.get(id=chunks[0].id)
     assert chunk.embedding_status == "pending"
     assert chunk.embedding is None
+    assert chunk.embedding_vector is None
     assert chunk.embedding_model is None
     assert chunk.embedded_at is None
 
