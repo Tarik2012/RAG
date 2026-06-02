@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
+from pgvector.django import VectorField
 
 import hashlib
 
@@ -89,6 +90,7 @@ class DocumentChunk(models.Model):
     text_hash = models.CharField(max_length=64, db_index=True)
 
     embedding = models.JSONField(null=True, blank=True)
+    embedding_vector = VectorField(dimensions=1536, null=True, blank=True)
 
     embedding_status = models.CharField(
         max_length=20,

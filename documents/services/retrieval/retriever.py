@@ -1,21 +1,11 @@
-import math
 from typing import List, Optional, Tuple
+
+from pgvector.django import CosineDistance
 
 from documents.models import Document, DocumentChunk
 from documents.services.embeddings.embedding_provider import EmbeddingProvider
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
-
-
-def cosine_similarity(a: List[float], b: List[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(y * y for y in b))
-
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-
-    return dot / (norm_a * norm_b)
 
 
 class Retriever:
@@ -46,9 +36,9 @@ class Retriever:
         """
         Devuelve los top_k chunks MÁS similares
         SOLO del documento activo del usuario.
+        La búsqueda por similitud la hace Postgres con pgvector.
         """
 
-        # 0. Documento activo del usuario
         active_document = Document.objects.filter(
             owner=user,
             is_active=True,
@@ -62,27 +52,28 @@ class Retriever:
         if self.query_rewriter is not None:
             rewritten_query = self.query_rewriter.rewrite(query)
 
-        # 1. Embedding de la query
         query_embedding = self.embedding_provider.embed_texts(
             [rewritten_query]
         )[0]
 
-        # 2. Cargar SOLO chunks del documento activo
-        chunks = DocumentChunk.objects.filter(
-            document=active_document,
-            embedding_status="embedded",
-            embedding__isnull=False,
+        # Búsqueda vectorial en Postgres: orden por distancia coseno ascendente
+        candidates = (
+            DocumentChunk.objects
+            .filter(
+                document=active_document,
+                embedding_status="embedded",
+                embedding_vector__isnull=False,
+            )
+            .annotate(distance=CosineDistance("embedding_vector", query_embedding))
+            .order_by("distance")[:20]
         )
 
-        # 3. Calcular similitud
-        scored_chunks: List[Tuple[DocumentChunk, float]] = []
-        for chunk in chunks:
-            score = cosine_similarity(query_embedding, chunk.embedding)
-            scored_chunks.append((chunk, score))
-
-        # 4. Ordenar por score descendente
-        scored_chunks.sort(key=lambda x: x[1], reverse=True)
-        scored_chunks = [(chunk, score) for chunk, score in scored_chunks if score >= 0.10]
+        # distancia coseno = 1 - similitud coseno
+        scored_chunks: List[Tuple[DocumentChunk, float]] = [
+            (chunk, 1.0 - float(chunk.distance))
+            for chunk in candidates
+            if (1.0 - float(chunk.distance)) >= 0.10
+        ]
 
         if not scored_chunks:
             return []

@@ -34,12 +34,14 @@ class ChunkEmbedder:
         with transaction.atomic():
             for chunk, embedding in zip(chunks, embeddings):
                 chunk.embedding = embedding
+                chunk.embedding_vector = embedding
                 chunk.embedding_status = "embedded"
                 chunk.embedding_model = self.model_name
                 chunk.embedded_at = now
                 chunk.save(
                     update_fields=[
                         "embedding",
+                        "embedding_vector",
                         "embedding_status",
                         "embedding_model",
                         "embedded_at",
