@@ -1,7 +1,10 @@
+from typing import TypedDict
+
 from django.conf import settings
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import create_react_agent
 
 from documents.models import Document
@@ -33,15 +36,17 @@ def _get_active_document(user):
 def _get_document_full_text(document) -> str:
     stored_file = getattr(document, "file", None)
     if stored_file:
-        stored_file.open("rb")
         try:
-            stored_file.seek(0)
-            file_text = stored_file.read().decode("utf-8", errors="ignore")
-        finally:
-            stored_file.close()
-
-        if file_text.strip():
-            return file_text
+            stored_file.open("rb")
+            try:
+                stored_file.seek(0)
+                file_text = stored_file.read().decode("utf-8", errors="ignore")
+            finally:
+                stored_file.close()
+            if file_text.strip():
+                return file_text
+        except (FileNotFoundError, OSError):
+            pass  # archivo no disponible -> usar fallback de chunks
 
     # Last resort only: reconstruct from chunks if the original file is unavailable.
     chunks = document.chunks.order_by("order").values_list("text", flat=True)
@@ -106,6 +111,10 @@ def build_tavily_tool():
     return tavily_search
 
 
+class AgentState(TypedDict, total=False):
+    messages: list
+
+
 def build_agent(user):
     retriever = Retriever(
         embedding_provider=_embedding_provider,
@@ -118,4 +127,15 @@ def build_agent(user):
         build_code_analysis_tool(retriever, user),
         build_tavily_tool(),
     ]
-    return create_react_agent(_llm, tools, debug=False)
+
+    react_agent = create_react_agent(_llm, tools, debug=False)
+
+    def run_agent(state: AgentState) -> dict:
+        result = react_agent.invoke({"messages": state["messages"]})
+        return {"messages": result["messages"]}
+
+    builder = StateGraph(AgentState)
+    builder.add_node("run_agent", run_agent)
+    builder.add_edge(START, "run_agent")
+    builder.add_edge("run_agent", END)
+    return builder.compile()
