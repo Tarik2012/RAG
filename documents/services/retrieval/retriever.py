@@ -34,9 +34,9 @@ class Retriever:
         top_k: int = 6,
     ) -> List[Tuple[DocumentChunk, float]]:
         """
-        Devuelve los top_k chunks MÁS similares
-        SOLO del documento activo del usuario.
-        La búsqueda por similitud la hace Postgres con pgvector.
+        Devuelve los top_k chunks más similares SOLO del documento activo.
+        Usa query expansion: busca con varias reformulaciones y combina
+        resultados quedándose con la mejor distancia por chunk.
         """
 
         active_document = Document.objects.filter(
@@ -48,43 +48,47 @@ class Retriever:
         if active_document is None:
             return []
 
-        rewritten_query = query
         if self.query_rewriter is not None:
-            rewritten_query = self.query_rewriter.rewrite(query)
+            queries = self.query_rewriter.expand(query)
+        else:
+            queries = [query]
 
-        query_embedding = self.embedding_provider.embed_texts(
-            [rewritten_query]
-        )[0]
+        query_embeddings = self.embedding_provider.embed_texts(queries)
 
-        # Búsqueda vectorial en Postgres: orden por distancia coseno ascendente
-        candidates = (
-            DocumentChunk.objects
-            .filter(
-                document=active_document,
-                embedding_status="embedded",
-                embedding_vector__isnull=False,
+        best_by_chunk: dict[int, Tuple[DocumentChunk, float]] = {}
+        for q_emb in query_embeddings:
+            candidates = (
+                DocumentChunk.objects
+                .filter(
+                    document=active_document,
+                    embedding_status="embedded",
+                    embedding_vector__isnull=False,
+                )
+                .annotate(distance=CosineDistance("embedding_vector", q_emb))
+                .order_by("distance")[:20]
             )
-            .annotate(distance=CosineDistance("embedding_vector", query_embedding))
-            .order_by("distance")[:20]
-        )
+            for chunk in candidates:
+                dist = float(chunk.distance)
+                current = best_by_chunk.get(chunk.id)
+                if current is None or dist < current[1]:
+                    best_by_chunk[chunk.id] = (chunk, dist)
 
-        # distancia coseno = 1 - similitud coseno
+        merged = sorted(best_by_chunk.values(), key=lambda item: item[1])
         scored_chunks: List[Tuple[DocumentChunk, float]] = [
-            (chunk, 1.0 - float(chunk.distance))
-            for chunk in candidates
-            if (1.0 - float(chunk.distance)) >= 0.10
-        ]
+            (chunk, 1.0 - dist)
+            for chunk, dist in merged
+            if (1.0 - dist) >= 0.10
+        ][:20]
 
         if not scored_chunks:
             return []
 
         if self.reranker is not None:
-            candidate_chunks = scored_chunks[:20]
-            texts = [chunk.text for chunk, _ in candidate_chunks]
-            reranked_texts = self.reranker.rerank(rewritten_query, texts)
+            texts = [chunk.text for chunk, _ in scored_chunks]
+            reranked_texts = self.reranker.rerank(query, texts)
 
             remaining_by_text: dict[str, List[Tuple[DocumentChunk, float]]] = {}
-            for chunk, score in candidate_chunks:
+            for chunk, score in scored_chunks:
                 remaining_by_text.setdefault(chunk.text, []).append((chunk, score))
 
             reranked_chunks: List[Tuple[DocumentChunk, float]] = []
