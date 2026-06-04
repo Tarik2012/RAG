@@ -32,3 +32,35 @@ class QueryRewriter:
             return cleaned
 
         return rewritten.strip()
+
+    def expand(self, question: str, n: int = 3) -> list[str]:
+        cleaned = (question or "").strip()
+        if not cleaned:
+            return [question]
+
+        instructions = (
+            "You are a query expansion assistant for document retrieval. "
+            f"Generate {n} alternative phrasings of the user's question that keep "
+            "the same intent but use different wording and synonyms. "
+            "Use only information present in the question; do NOT answer it or add external knowledge. "
+            "Return each alternative on its own line, with no numbering, bullets, or extra text."
+        )
+
+        response = self.client.responses.create(
+            model=settings.OPENAI_MODEL,
+            instructions=instructions,
+            input=cleaned,
+        )
+
+        text = response.output_text or ""
+        variants = [line.strip() for line in text.splitlines() if line.strip()]
+
+        # Siempre incluir la original; deduplicar preservando el orden
+        seen = set()
+        unique: list[str] = []
+        for q in [cleaned] + variants:
+            key = q.lower()
+            if key not in seen:
+                seen.add(key)
+                unique.append(q)
+        return unique
