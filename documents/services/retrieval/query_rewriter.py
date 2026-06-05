@@ -33,6 +33,32 @@ class QueryRewriter:
 
         return rewritten.strip()
 
+    def reformulate(self, question: str) -> str:
+        cleaned = (question or "").strip()
+        if not cleaned:
+            return question
+
+        instructions = (
+            "You are a query reformulation assistant for document retrieval. "
+            "Rewrite the user's question into one clearly different single version "
+            "that preserves the same intent but changes the phrasing substantially. "
+            "Use only information already present in the question. "
+            "Do NOT answer the question and do NOT introduce external knowledge. "
+            "Return only the reformulated question and nothing else."
+        )
+
+        response = self.client.responses.create(
+            model=settings.OPENAI_MODEL,
+            instructions=instructions,
+            input=cleaned,
+        )
+
+        reformulated = response.output_text
+        if not reformulated or not reformulated.strip():
+            return cleaned
+
+        return reformulated.strip()
+
     def expand(self, question: str, n: int = 3) -> list[str]:
         cleaned = (question or "").strip()
         if not cleaned:

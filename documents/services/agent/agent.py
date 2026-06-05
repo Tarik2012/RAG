@@ -2,6 +2,7 @@ from typing import TypedDict
 
 from django.conf import settings
 from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
@@ -23,6 +24,7 @@ _llm = ChatOpenAI(
     temperature=0,
 )
 _tavily_tool = TavilySearchResults(max_results=3)
+MAX_RETRIES = 1
 
 
 def _get_active_document(user):
@@ -113,6 +115,8 @@ def build_tavily_tool():
 
 class AgentState(TypedDict, total=False):
     messages: list
+    answer_ok: bool
+    retries: int
 
 
 def build_agent(user):
@@ -134,8 +138,59 @@ def build_agent(user):
         result = react_agent.invoke({"messages": state["messages"]})
         return {"messages": result["messages"]}
 
+    def reflect(state: AgentState) -> dict:
+        messages = state["messages"]
+        question = next(
+            (m.content for m in messages if getattr(m, "type", None) == "human"),
+            "",
+        )
+        answer = messages[-1].content if messages else ""
+
+        grader_prompt = (
+            "You are a strict grader for a question-answering assistant. "
+            "Given the user's QUESTION and the assistant's ANSWER, decide if the answer "
+            "actually addresses the question with concrete, relevant content. "
+            "If the answer fails to find the information, is empty, evasive, or off-topic, output RETRY. "
+            "Otherwise output GOOD. Respond with exactly one word: GOOD or RETRY.\n\n"
+            f"QUESTION:\n{question}\n\nANSWER:\n{answer}"
+        )
+        verdict = (_llm.invoke(grader_prompt).content or "").strip().upper()
+        answer_ok = "RETRY" not in verdict
+        print(f">>> REFLECT verdict={verdict} answer_ok={answer_ok}", flush=True)
+        return {"answer_ok": answer_ok}
+
+    def reformulate(state: AgentState) -> dict:
+        messages = list(state["messages"])
+        original_question = next(
+            (m.content for m in messages if getattr(m, "type", None) == "human"),
+            "",
+        )
+        reformulated_question = _query_rewriter.reformulate(original_question)
+        messages.append(HumanMessage(content=reformulated_question))
+        retries = state.get("retries", 0) + 1
+        print(f">>> REFORMULATE retries={retries}", flush=True)
+        return {"messages": messages, "retries": retries}
+
+    def should_retry(state: AgentState) -> str:
+        if state["answer_ok"] is True:
+            return "end"
+        if state.get("retries", 0) >= MAX_RETRIES:
+            return "end"
+        return "retry"
+
     builder = StateGraph(AgentState)
     builder.add_node("run_agent", run_agent)
+    builder.add_node("reflect", reflect)
+    builder.add_node("reformulate", reformulate)
     builder.add_edge(START, "run_agent")
-    builder.add_edge("run_agent", END)
+    builder.add_edge("run_agent", "reflect")
+    builder.add_conditional_edges(
+        "reflect",
+        should_retry,
+        {
+            "retry": "reformulate",
+            "end": END,
+        },
+    )
+    builder.add_edge("reformulate", "run_agent")
     return builder.compile()
