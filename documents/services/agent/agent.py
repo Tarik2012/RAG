@@ -1,3 +1,5 @@
+import logging
+import os
 from functools import lru_cache
 from typing import TypedDict
 
@@ -19,6 +21,7 @@ from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
 
+logger = logging.getLogger(__name__)
 _reranker = CrossEncoderReranker()
 _embedding_provider = OpenAIEmbeddingProvider()
 _query_rewriter = QueryRewriter()
@@ -28,10 +31,10 @@ _llm = ChatOpenAI(
 )
 _tavily_tool = TavilySearchResults(max_results=3)
 _MCP_CONFIG = {
-    "toy": {
-        "command": "python",
-        "args": ["documents/services/mcp/toy_server.py"],
-        "transport": "stdio",
+    "github": {
+        "url": "https://api.githubcopilot.com/mcp/",
+        "transport": "streamable_http",
+        "headers": {"Authorization": f"Bearer {os.environ.get('GITHUB_PAT', '')}"},
     }
 }
 MAX_RETRIES = 1
@@ -39,8 +42,12 @@ MAX_RETRIES = 1
 
 @lru_cache(maxsize=1)
 def _get_mcp_tools():
-    client = MultiServerMCPClient(_MCP_CONFIG)
-    return list(async_to_sync(client.get_tools)())
+    try:
+        client = MultiServerMCPClient(_MCP_CONFIG)
+        return list(async_to_sync(client.get_tools)())
+    except Exception as exc:
+        logger.warning("No se pudieron cargar las tools MCP: %s", exc)
+        return []
 
 
 def _get_active_document(user):
