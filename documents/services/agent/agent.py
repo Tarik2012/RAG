@@ -1,9 +1,12 @@
+from functools import lru_cache
 from typing import TypedDict
 
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import create_react_agent
@@ -24,7 +27,20 @@ _llm = ChatOpenAI(
     temperature=0,
 )
 _tavily_tool = TavilySearchResults(max_results=3)
+_MCP_CONFIG = {
+    "toy": {
+        "command": "python",
+        "args": ["documents/services/mcp/toy_server.py"],
+        "transport": "stdio",
+    }
+}
 MAX_RETRIES = 1
+
+
+@lru_cache(maxsize=1)
+def _get_mcp_tools():
+    client = MultiServerMCPClient(_MCP_CONFIG)
+    return list(async_to_sync(client.get_tools)())
 
 
 def _get_active_document(user):
@@ -131,11 +147,12 @@ def build_agent(user):
         build_code_analysis_tool(retriever, user),
         build_tavily_tool(),
     ]
+    tools = tools + _get_mcp_tools()
 
     react_agent = create_react_agent(_llm, tools, debug=False)
 
     def run_agent(state: AgentState) -> dict:
-        result = react_agent.invoke({"messages": state["messages"]})
+        result = async_to_sync(react_agent.ainvoke)({"messages": state["messages"]})
         return {"messages": result["messages"]}
 
     def reflect(state: AgentState) -> dict:

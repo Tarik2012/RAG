@@ -75,6 +75,9 @@ def test_build_agent_retries_once_then_succeeds(monkeypatch, user):
                 ]
             }
 
+        async def ainvoke(self, *args, **kwargs):
+            return self.invoke(*args, **kwargs)
+
     class FakeLLM:
         def invoke(self, prompt):
             grade_calls.append(prompt)
@@ -113,6 +116,9 @@ def test_build_agent_stops_after_max_retries(monkeypatch, user):
                     AIMessage(content=f"answer {len(run_calls)}"),
                 ]
             }
+
+        async def ainvoke(self, *args, **kwargs):
+            return self.invoke(*args, **kwargs)
 
     class FakeLLM:
         def invoke(self, prompt):
