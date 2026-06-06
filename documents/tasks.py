@@ -18,5 +18,6 @@ def process_document_task(self, document_id: int):
         Document.set_active_for_user(document=document)
 
     except Exception:
-        # process_document ya marca el documento como "failed"
+        document.status = "failed"
+        document.save(update_fields=["status"])
         raise
