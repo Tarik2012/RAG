@@ -1,3 +1,4 @@
+import logging
 from typing import List, Optional, Tuple
 
 from pgvector.django import CosineDistance
@@ -6,6 +7,18 @@ from documents.models import Document, DocumentChunk
 from documents.services.embeddings.embedding_provider import EmbeddingProvider
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
+
+logger = logging.getLogger(__name__)
+
+
+def _expand_or_fallback(query_rewriter, query):
+    if not query_rewriter:
+        return [query]
+    try:
+        return query_rewriter.expand(query)
+    except Exception as exc:
+        logger.warning("Query expansion falló, usando query original: %s", exc)
+        return [query]
 
 
 class Retriever:
@@ -48,10 +61,7 @@ class Retriever:
         if active_document is None:
             return []
 
-        if self.query_rewriter is not None:
-            queries = self.query_rewriter.expand(query)
-        else:
-            queries = [query]
+        queries = _expand_or_fallback(self.query_rewriter, query)
 
         query_embeddings = self.embedding_provider.embed_texts(queries)
 
