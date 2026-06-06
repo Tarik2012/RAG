@@ -37,6 +37,7 @@ _MCP_CONFIG = {
         "headers": {"Authorization": f"Bearer {os.environ.get('GITHUB_PAT', '')}"},
     }
 }
+_MCP_TOOL_ALLOWLIST = {"get_file_contents", "search_code"}
 MAX_RETRIES = 1
 
 
@@ -44,7 +45,8 @@ MAX_RETRIES = 1
 def _get_mcp_tools():
     try:
         client = MultiServerMCPClient(_MCP_CONFIG)
-        return list(async_to_sync(client.get_tools)())
+        tools = list(async_to_sync(client.get_tools)())
+        return [t for t in tools if t.name in _MCP_TOOL_ALLOWLIST]
     except Exception as exc:
         logger.warning("No se pudieron cargar las tools MCP: %s", exc)
         return []
