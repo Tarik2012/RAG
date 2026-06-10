@@ -13,6 +13,7 @@ from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
 from documents.services.llm.openai_llm_provider import OpenAILLMProvider
+from documents.services.router.intent_router import classify_intent
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
@@ -229,9 +230,10 @@ def ask_page(request):
         question = request.POST.get("question", "").strip()
 
         if question:
-            mode = request.POST.get("mode", "documento")
+            mode = classify_intent(question)
+            logger.info("router decision: %s", mode)
             try:
-                if mode == "agente":
+                if mode == "agent":
                     agent = _build_agent_service(request.user)
                     result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
                     tool_names = _extract_called_tools(result)
