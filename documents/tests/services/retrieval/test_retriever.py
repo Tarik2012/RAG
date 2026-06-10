@@ -18,7 +18,6 @@ def document(user):
         content_type="text/plain",
         size=5,
         status="processed",
-        is_active=True,
     )
 
 
@@ -77,7 +76,7 @@ def test_retriever_searches_all_user_documents(user):
         owner=user, original_name="active.txt",
         file=SimpleUploadedFile("active.txt", b"x"),
         content_type="text/plain", size=1,
-        status="processed", is_active=True,
+        status="processed",
     )
     DocumentChunk.objects.create(
         document=active_doc, order=0, text="alpha text",
@@ -89,7 +88,7 @@ def test_retriever_searches_all_user_documents(user):
         owner=user, original_name="inactive.txt",
         file=SimpleUploadedFile("inactive.txt", b"y"),
         content_type="text/plain", size=1,
-        status="processed", is_active=False,
+        status="processed",
     )
     DocumentChunk.objects.create(
         document=inactive_doc, order=0, text="alpha text",

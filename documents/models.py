@@ -1,8 +1,7 @@
 from django.conf import settings
-from django.db import models, transaction
-from django.db.models import Q
+from django.db import models
 from django.utils import timezone
-from pgvector.django import VectorField
+from pgvector.django import HnswIndex, VectorField
 
 import hashlib
 
@@ -32,42 +31,10 @@ class Document(models.Model):
         default="uploaded",
     )
 
-    #  Documento activo (clave del diseño)
-    is_active = models.BooleanField(default=False, db_index=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["owner"],
-                condition=Q(is_active=True),
-                name="unique_active_document_per_owner",
-            )
-        ]
 
     def __str__(self) -> str:
         return self.original_name
-
-    @classmethod
-    def set_active_for_user(cls, *, document: "Document"):
-        """
-        Marca este documento como activo y desactiva los demás del usuario.
-        """
-        with transaction.atomic():
-            locked_queryset = cls.objects.select_for_update().filter(
-                owner=document.owner
-            )
-            locked_document = locked_queryset.get(id=document.id)
-
-            if locked_document.status != "processed":
-                raise ValueError("Only processed documents can be activated.")
-
-            locked_queryset.exclude(id=locked_document.id).update(is_active=False)
-
-            if not locked_document.is_active:
-                locked_document.is_active = True
-                locked_document.save(update_fields=["is_active"])
 
 
 class DocumentChunk(models.Model):
@@ -109,6 +76,15 @@ class DocumentChunk(models.Model):
             models.UniqueConstraint(
                 fields=["document", "order"],
                 name="unique_chunk_order_per_document",
+            )
+        ]
+        indexes = [
+            HnswIndex(
+                fields=["embedding_vector"],
+                name="docchunk_embed_vector_hnsw_idx",
+                opclasses=["vector_cosine_ops"],
+                m=16,
+                ef_construction=64,
             )
         ]
 

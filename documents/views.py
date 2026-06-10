@@ -1,6 +1,5 @@
 import logging
 import json
-from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -20,11 +19,6 @@ from documents.services.retrieval.retriever import Retriever
 from documents.tasks import process_document_task
 
 logger = logging.getLogger(__name__)
-CODE_EXTENSIONS = {
-    ".py", ".js", ".ts", ".java", ".cs", ".cpp", ".go", ".rb",
-    ".php", ".swift", ".kt", ".html", ".htm", ".css",
-    ".json", ".xml", ".yaml", ".yml", ".md", ".txt", ".rst",
-}
 
 
 def _build_ask_service() -> AskService:
@@ -49,41 +43,20 @@ def _build_agent_service(user):
     return build_agent(user)
 
 
-def _get_active_document(user):
-    return Document.objects.filter(
-        owner=user,
-        is_active=True,
-        status="processed",
-    ).first()
-
-
 def _build_agent_messages(*, user, question: str) -> list[dict[str, str]]:
-    active_document = _get_active_document(user)
-    if active_document is None:
-        system_content = (
-            "No hay un documento activo procesado para este usuario. "
-            "Si necesitas contenido del documento, la herramienta puede no encontrar resultados."
-        )
+    nombres = list(
+        Document.objects.filter(owner=user, status="processed")
+        .values_list("original_name", flat=True)
+    )
+    if not nombres:
+        system_content = "El usuario no tiene documentos procesados; search_document puede no encontrar resultados."
     else:
-        source_name = active_document.original_name or active_document.file.name or ""
-        extension = Path(source_name).suffix.lower() or "unknown"
-        content_type = active_document.content_type or "unknown"
-        is_code_document = extension in CODE_EXTENSIONS
-        document_kind = "código" if is_code_document else "documento"
-
         system_content = (
-            f"El documento activo del usuario es '{active_document.original_name}' "
-            f"(tipo {content_type}, extensión {extension}). "
-            f"Este documento debe tratarse como {document_kind}. "
-            "Regla principal: para CUALQUIER pregunta que pueda responderse con el contenido "
-            "del documento activo, DEBES consultar primero el documento (con la herramienta "
-            "correspondiente) antes de responder. No respondas con tu conocimiento general si el "
-            "documento podría contener la respuesta. "
-            "Usa analyze_code si el documento es código (.py, .js, .ts, etc.) y la pregunta trata "
-            "sobre errores, mejoras, funciones, refactorización, revisión o seguridad del código. "
-            "En cualquier otro caso usa search_document. "
-            "Solo si el documento no contiene la respuesta puedes usar tu propio conocimiento "
-            "o tavily_search para información externa o de actualidad."
+            f"El usuario tiene estos documentos: {', '.join(nombres)}. "
+            "Para preguntas sobre el contenido, usa search_document (busca en todos). "
+            "Para analizar, revisar, documentar o auditar un archivo de código concreto, usa "
+            "analyze_code indicando el nombre del archivo en document_name. "
+            "Usa tavily_search solo para información externa o de actualidad."
         )
 
     return [

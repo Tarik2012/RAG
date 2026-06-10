@@ -52,14 +52,6 @@ def _get_mcp_tools():
         return []
 
 
-def _get_active_document(user):
-    return Document.objects.filter(
-        owner=user,
-        is_active=True,
-        status="processed",
-    ).first()
-
-
 def _get_document_full_text(document) -> str:
     stored_file = getattr(document, "file", None)
     if stored_file:
@@ -83,7 +75,7 @@ def _get_document_full_text(document) -> str:
 def build_rag_tool(retriever, user):
     @tool
     def search_document(query: str) -> str:
-        """Search the active user document for information, text, policies, data or any content.
+        """Search the user's documents for information, text, policies, data or any content.
         Use this for general questions about the document content."""
         print(">>> TOOL USED: search_document", flush=True)
         results = retriever.retrieve(query=query, user=user, top_k=5)
@@ -97,31 +89,37 @@ def build_rag_tool(retriever, user):
 
 def build_code_analysis_tool(retriever, user):
     @tool
-    def analyze_code(query: str) -> str:
+    def analyze_code(query: str, document_name: str) -> str:
         """Use this tool for ANY request involving code: improving, fixing bugs, optimizing,
         refactoring, explaining, documenting, reviewing code quality, or auditing security.
-        Always inspect the full active code file, always check for hardcoded secrets or credentials,
-        and report only issues that are actually present in the code you received.
-        Do not invent duplicates, vulnerabilities, or missing pieces that are not visible in the file.
-        Input should describe what to analyze, e.g. 'all functions', 'the entire code', or 'security review'."""
+        'document_name' is the name of the file to analyze (one of the user's uploaded files).
+        Review the full code, always check for hardcoded secrets/credentials, and report only
+        issues actually present in the code. Do not invent problems not visible in the file."""
         print(">>> TOOL USED: analyze_code", flush=True)
-        active_document = _get_active_document(user)
-        if active_document is None:
-            return "No code found in the document"
-
-        full_text = _get_document_full_text(active_document)
+        document = Document.objects.filter(
+            owner=user, status="processed", original_name__icontains=document_name,
+        ).first()
+        if document is None:
+            available = list(
+                Document.objects.filter(owner=user, status="processed")
+                .values_list("original_name", flat=True)
+            )
+            return f"No file matching '{document_name}'. Available files: {', '.join(available) or 'none'}."
+        full_text = _get_document_full_text(document)
         if not full_text.strip():
             return "No code found in the document"
-
+        MAX_CHARS = 80000
+        truncated = full_text[:MAX_CHARS]
+        nota = "" if len(full_text) <= MAX_CHARS else "\n\n[Note: file truncated due to size.]"
         return (
             "Analysis instructions:\n"
             f"- User request: {query}\n"
+            f"- File analyzed: {document.original_name}\n"
             "- Review the full code below.\n"
             "- Always check for hardcoded secrets, credentials, tokens, or API keys.\n"
-            "- Report only issues that are truly present in this code.\n"
-            "- Do not claim duplicated logic, bugs, or vulnerabilities unless the code below shows them.\n\n"
+            "- Report only issues that are truly present in this code.\n\n"
             "Full file content:\n"
-            f"{full_text}"
+            f"{truncated}{nota}"
         )
 
     return analyze_code

@@ -26,7 +26,6 @@ def test_get_document_full_text_concatenates_all_chunks_in_order(user):
         content_type="text/plain",
         size=42,
         status="processed",
-        is_active=True,
     )
 
     DocumentChunk.objects.create(document=document, order=2, text="third()")
@@ -50,7 +49,6 @@ def test_get_document_full_text_prefers_original_file_content(user, tmp_path, se
         content_type="text/plain",
         size=original_file.stat().st_size,
         status="processed",
-        is_active=True,
     )
 
     DocumentChunk.objects.create(document=document, order=0, text="print('chunk overlap')")

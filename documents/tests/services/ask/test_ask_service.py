@@ -41,7 +41,6 @@ def document(user):
         content_type="text/plain",
         size=5,
         status="processed",
-        is_active=True,
     )
 
 
