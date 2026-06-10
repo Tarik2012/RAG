@@ -181,7 +181,7 @@ def build_agent(user):
             f"QUESTION:\n{question}\n\nANSWER:\n{answer}"
         )
         verdict = (_llm.invoke(grader_prompt).content or "").strip().upper()
-        answer_ok = "RETRY" not in verdict
+        answer_ok = verdict.startswith("GOOD")
         print(f">>> REFLECT verdict={verdict} answer_ok={answer_ok}", flush=True)
         return {"answer_ok": answer_ok}
 

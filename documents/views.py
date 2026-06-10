@@ -75,11 +75,15 @@ def _build_agent_messages(*, user, question: str) -> list[dict[str, str]]:
             f"El documento activo del usuario es '{active_document.original_name}' "
             f"(tipo {content_type}, extensión {extension}). "
             f"Este documento debe tratarse como {document_kind}. "
-            "Regla de enrutado: "
-            "si el documento activo es código (.py, .js, .ts, etc.) y la pregunta trata sobre "
-            "errores, mejoras, funciones, refactorización, revisión o seguridad del código, "
-            "usa analyze_code. "
-            "Si el documento activo es un documento normal (PDF, texto, CSV, etc.), usa search_document."
+            "Regla principal: para CUALQUIER pregunta que pueda responderse con el contenido "
+            "del documento activo, DEBES consultar primero el documento (con la herramienta "
+            "correspondiente) antes de responder. No respondas con tu conocimiento general si el "
+            "documento podría contener la respuesta. "
+            "Usa analyze_code si el documento es código (.py, .js, .ts, etc.) y la pregunta trata "
+            "sobre errores, mejoras, funciones, refactorización, revisión o seguridad del código. "
+            "En cualquier otro caso usa search_document. "
+            "Solo si el documento no contiene la respuesta puedes usar tu propio conocimiento "
+            "o tavily_search para información externa o de actualidad."
         )
 
     return [
@@ -126,6 +130,12 @@ def document_list(request):
 
 
 @login_required
+def document_status(request):
+    docs = Document.objects.filter(owner=request.user).values("id", "status")
+    return JsonResponse({"documents": list(docs)})
+
+
+@login_required
 def document_upload(request):
     if request.method == "POST":
         form = DocumentUploadForm(request.POST, request.FILES)
@@ -150,20 +160,6 @@ def document_upload(request):
         "documents/document_upload.html",
         {"form": form},
     )
-
-
-@login_required
-@require_POST
-def document_activate(request, pk):
-    document = get_object_or_404(
-        Document,
-        pk=pk,
-        owner=request.user,
-    )
-
-    Document.set_active_for_user(document=document)
-
-    return redirect("documents:list")
 
 
 @login_required
@@ -203,10 +199,10 @@ def ask_view(request):
         )
     except Exception:
         logger.exception("Agent failed for user %s", request.user.id)
-        result = {
-            "question": question,
-            "answer": "Lo siento...",
-        }
+        return JsonResponse(
+            {"error": "Internal error processing the question"},
+            status=500,
+        )
 
     return JsonResponse(result, status=200)
 
@@ -232,7 +228,10 @@ def agent_view(request):
         answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
     except Exception:
         logger.exception("Agent failed for user %s", request.user.id)
-        answer = "Lo siento..."
+        return JsonResponse(
+            {"error": "Internal error processing the question"},
+            status=500,
+        )
 
     return JsonResponse(
         {
@@ -257,13 +256,20 @@ def ask_page(request):
         question = request.POST.get("question", "").strip()
 
         if question:
+            mode = request.POST.get("mode", "documento")
             try:
-                agent = _build_agent_service(request.user)
-                result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
-                tool_names = _extract_called_tools(result)
-                print(">>> TOOLS CALLED:", tool_names, flush=True)
-                answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
+                if mode == "agente":
+                    agent = _build_agent_service(request.user)
+                    result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
+                    tool_names = _extract_called_tools(result)
+                    print(">>> TOOLS CALLED:", tool_names, flush=True)
+                    answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
+                else:
+                    ask_service = _build_ask_service()
+                    result = ask_service.ask(question=question, user=request.user, top_k=6)
+                    answer = result["answer"]
             except Exception:
+                logger.exception("Ask failed for user %s", request.user.id)
                 answer = "Lo siento..."
 
             history = request.session.get("chat_history", [])

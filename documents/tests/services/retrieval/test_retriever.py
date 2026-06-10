@@ -69,7 +69,7 @@ def test_retriever_orders_results_by_similarity(embedded_chunks):
     assert scores == sorted(scores, reverse=True)
 
 
-def test_retriever_only_returns_active_document_chunks(user):
+def test_retriever_searches_all_user_documents(user):
     provider = TestEmbeddingProvider()
     vector = provider.embed_texts(["alpha text"])[0]
 
@@ -101,7 +101,9 @@ def test_retriever_only_returns_active_document_chunks(user):
     results = retriever.retrieve(query="alpha text", top_k=10, user=user)
 
     assert results
-    assert all(chunk.document_id == active_doc.id for chunk, _ in results)
+    result_document_ids = {chunk.document_id for chunk, _ in results}
+    assert active_doc.id in result_document_ids
+    assert inactive_doc.id in result_document_ids
 
 
 class TestEmbeddingProvider:

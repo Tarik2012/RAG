@@ -31,3 +31,23 @@ def test_failed_status_persists_after_task_rollback(user):
 
     document.refresh_from_db()
     assert document.status == "failed"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_activation_failure_does_not_mark_document_failed(document_factory):
+    doc = document_factory()
+
+    def fake_process(document):
+        document.status = "processed"
+        document.save(update_fields=["status"])
+        return 1
+
+    with (
+        patch("documents.tasks.process_document", new=fake_process),
+        patch("documents.models.Document.set_active_for_user", side_effect=Exception("boom")),
+    ):
+        process_document_task.apply(args=[doc.id])
+
+    doc.refresh_from_db()
+    assert doc.status == "processed"
+    assert doc.is_active is False

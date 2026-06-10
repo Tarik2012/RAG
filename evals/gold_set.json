@@ -1,0 +1,14 @@
+[
+  { "question": "¿Qué es un cross-encoder?", "expected_snippets": ["Analiza query + chunk juntos"] },
+  { "question": "¿Qué es un bi-encoder?", "expected_snippets": ["Convierte query y chunks por separado"] },
+  { "question": "¿Qué valor usa el similarity threshold?", "expected_snippets": ["0.25"] },
+  { "question": "¿Qué hace el reranking?", "expected_snippets": ["Reordenar chunks por relevancia real"] },
+  { "question": "¿Qué es el overlap en chunking?", "expected_snippets": ["Solapamiento entre chunks"] },
+  { "question": "¿Qué es Tavily?", "expected_snippets": ["Motor de búsqueda optimizado para agentes"] },
+  { "question": "¿Qué es pgvector?", "expected_snippets": ["Extensión de PostgreSQL para búsqueda vectorial"] },
+  { "question": "¿Para qué se usa Redis en el proyecto?", "expected_snippets": ["broker de mensajes"] },
+  { "question": "¿Qué significa ReAct?", "expected_snippets": ["Reason + Act"] },
+  { "question": "¿Para qué sirve el docstring de una tool?", "expected_snippets": ["el agente la lee para decidir cuándo usarla"] },
+  { "question": "¿Qué es Gunicorn?", "expected_snippets": ["Servidor web de producción para Django"] },
+  { "question": "¿Por qué se construyó el RAG desde cero?", "expected_snippets": ["entender cada capa"] }
+]

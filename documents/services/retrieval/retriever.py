@@ -45,35 +45,32 @@ class Retriever:
         query: str,
         user,
         top_k: int = 6,
+        document_ids: Optional[List[int]] = None,
     ) -> List[Tuple[DocumentChunk, float]]:
         """
-        Devuelve los top_k chunks más similares SOLO del documento activo.
-        Usa query expansion: busca con varias reformulaciones y combina
-        resultados quedándose con la mejor distancia por chunk.
+        Devuelve los top_k chunks más similares de los documentos del usuario.
+        Por defecto busca en TODOS los documentos procesados del usuario (el "proyecto").
+        Si se pasa document_ids, acota la búsqueda a esos documentos.
         """
+        base_chunks = DocumentChunk.objects.filter(
+            document__owner=user,
+            document__status="processed",
+            embedding_status="embedded",
+            embedding_vector__isnull=False,
+        )
+        if document_ids:
+            base_chunks = base_chunks.filter(document_id__in=document_ids)
 
-        active_document = Document.objects.filter(
-            owner=user,
-            is_active=True,
-            status="processed",
-        ).first()
-
-        if active_document is None:
+        if not base_chunks.exists():
             return []
 
         queries = _expand_or_fallback(self.query_rewriter, query)
-
         query_embeddings = self.embedding_provider.embed_texts(queries)
 
         best_by_chunk: dict[int, Tuple[DocumentChunk, float]] = {}
         for q_emb in query_embeddings:
             candidates = (
-                DocumentChunk.objects
-                .filter(
-                    document=active_document,
-                    embedding_status="embedded",
-                    embedding_vector__isnull=False,
-                )
+                base_chunks
                 .annotate(distance=CosineDistance("embedding_vector", q_emb))
                 .order_by("distance")[:20]
             )
@@ -89,18 +86,15 @@ class Retriever:
             for chunk, dist in merged
             if (1.0 - dist) >= 0.10
         ][:20]
-
         if not scored_chunks:
             return []
 
         if self.reranker is not None:
             texts = [chunk.text for chunk, _ in scored_chunks]
             reranked_texts = self.reranker.rerank(query, texts)
-
             remaining_by_text: dict[str, List[Tuple[DocumentChunk, float]]] = {}
             for chunk, score in scored_chunks:
                 remaining_by_text.setdefault(chunk.text, []).append((chunk, score))
-
             reranked_chunks: List[Tuple[DocumentChunk, float]] = []
             for text in reranked_texts:
                 matches = remaining_by_text.get(text)
@@ -108,7 +102,6 @@ class Retriever:
                     continue
                 chunk, _ = matches.pop(0)
                 reranked_chunks.append((chunk, 1.0))
-
             return reranked_chunks[:top_k]
 
         return scored_chunks[:top_k]
