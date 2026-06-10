@@ -197,7 +197,7 @@ def agent_view(request):
         agent = _build_agent_service(request.user)
         result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
         tool_names = _extract_called_tools(result)
-        print(">>> TOOLS CALLED:", tool_names, flush=True)
+        logger.info("tools called: %s", tool_names)
         answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
     except Exception:
         logger.exception("Agent failed for user %s", request.user.id)
@@ -235,7 +235,7 @@ def ask_page(request):
                     agent = _build_agent_service(request.user)
                     result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
                     tool_names = _extract_called_tools(result)
-                    print(">>> TOOLS CALLED:", tool_names, flush=True)
+                    logger.info("tools called: %s", tool_names)
                     answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
                 else:
                     ask_service = _build_ask_service()

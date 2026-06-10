@@ -77,7 +77,7 @@ def build_rag_tool(retriever, user):
     def search_document(query: str) -> str:
         """Search the user's documents for information, text, policies, data or any content.
         Use this for general questions about the document content."""
-        print(">>> TOOL USED: search_document", flush=True)
+        logger.info("tool used: search_document")
         results = retriever.retrieve(query=query, user=user, top_k=5)
         if not results:
             return "No relevant information found in the document"
@@ -95,7 +95,7 @@ def build_code_analysis_tool(retriever, user):
         'document_name' is the name of the file to analyze (one of the user's uploaded files).
         Review the full code, always check for hardcoded secrets/credentials, and report only
         issues actually present in the code. Do not invent problems not visible in the file."""
-        print(">>> TOOL USED: analyze_code", flush=True)
+        logger.info("tool used: analyze_code")
         document = Document.objects.filter(
             owner=user, status="processed", original_name__icontains=document_name,
         ).first()
@@ -129,7 +129,7 @@ def build_tavily_tool():
     @tool("tavily_search")
     def tavily_search(query: str) -> str:
         """Search the web for recent external information when the active document is insufficient."""
-        print(">>> TOOL USED: tavily_search", flush=True)
+        logger.info("tool used: tavily_search")
         result = _tavily_tool.invoke({"query": query})
         return str(result)
 
@@ -180,7 +180,7 @@ def build_agent(user):
         )
         verdict = (_llm.invoke(grader_prompt).content or "").strip().upper()
         answer_ok = verdict.startswith("GOOD")
-        print(f">>> REFLECT verdict={verdict} answer_ok={answer_ok}", flush=True)
+        logger.debug("reflect verdict=%s answer_ok=%s", verdict, answer_ok)
         return {"answer_ok": answer_ok}
 
     def reformulate(state: AgentState) -> dict:
@@ -192,7 +192,7 @@ def build_agent(user):
         reformulated_question = _query_rewriter.reformulate(original_question)
         messages.append(HumanMessage(content=reformulated_question))
         retries = state.get("retries", 0) + 1
-        print(f">>> REFORMULATE retries={retries}", flush=True)
+        logger.debug("reformulate retries=%s", retries)
         return {"messages": messages, "retries": retries}
 
     def should_retry(state: AgentState) -> str:
