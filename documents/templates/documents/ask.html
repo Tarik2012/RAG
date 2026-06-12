@@ -85,6 +85,21 @@
               <script>
                 document.getElementById('answer-{{ forloop.counter }}').innerHTML = marked.parse(`{{ item.answer|escapejs }}`);
               </script>
+              {% if item.sources %}
+                <div class="mt-3 pt-3 border-t border-gray-100">
+                  <div class="text-xs font-medium text-gray-400 mb-2">Fuentes</div>
+                  <div class="flex flex-wrap gap-2">
+                    {% regroup item.sources|dictsort:"file" by file as source_groups %}
+                    {% for group in source_groups %}
+                      <span class="inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-600">
+                        <span class="font-medium text-gray-700">{{ group.grouper }}</span>
+                        <span class="text-gray-400">·</span>
+                        <span class="text-gray-500">frag {% for s in group.list %}{{ s.fragment }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+                      </span>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
               </div>
             </div>
           </div>

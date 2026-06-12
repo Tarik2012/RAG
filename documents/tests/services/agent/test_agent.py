@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from documents.models import Document, DocumentChunk
 from documents.services.agent import agent
-from documents.services.agent.agent import _get_document_full_text
+from documents.services.extraction.text_extraction import get_document_full_text
 
 
 pytestmark = pytest.mark.django_db
@@ -32,7 +32,7 @@ def test_get_document_full_text_concatenates_all_chunks_in_order(user):
     DocumentChunk.objects.create(document=document, order=0, text="first()")
     DocumentChunk.objects.create(document=document, order=1, text="second()")
 
-    assert _get_document_full_text(document) == "first()\n\nsecond()\n\nthird()"
+    assert get_document_full_text(document) == "first()\n\nsecond()\n\nthird()"
 
 
 def test_get_document_full_text_prefers_original_file_content(user, tmp_path, settings):
@@ -54,7 +54,7 @@ def test_get_document_full_text_prefers_original_file_content(user, tmp_path, se
     DocumentChunk.objects.create(document=document, order=0, text="print('chunk overlap')")
     DocumentChunk.objects.create(document=document, order=1, text="print('chunk overlap')")
 
-    assert _get_document_full_text(document) == "print('from file')\nprint('exact source')"
+    assert get_document_full_text(document) == "print('from file')\nprint('exact source')"
 
 
 def test_build_agent_retries_once_then_succeeds(monkeypatch, user):

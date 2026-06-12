@@ -32,11 +32,12 @@ class AskService:
             return {
                 "question": question,
                 "answer": (
-                    "No tengo información suficiente en el documento activo "
+                    "No tengo información suficiente en tus documentos "
                     "para responder a esta pregunta."
                 ),
                 "context": "",
                 "chunks_used": 0,
+                "sources": [],
             }
 
         context_chunks: List[str] = [chunk.text for chunk, _ in results]
@@ -46,10 +47,15 @@ class AskService:
             question=question,
             context=context,
         )
+        sources = [
+            {"file": chunk.document.original_name, "fragment": chunk.order}
+            for chunk, _ in results
+        ]
 
         return {
             "question": question,
             "answer": answer,
             "context": context,
             "chunks_used": len(context_chunks),
+            "sources": sources,
         }

@@ -13,6 +13,12 @@ class Document(models.Model):
         ("processed", "Processed"),
         ("failed", "Failed"),
     ]
+    DOCUMENTATION_STATUS_CHOICES = [
+        ("none", "None"),
+        ("processing", "Processing"),
+        ("ready", "Ready"),
+        ("failed", "Failed"),
+    ]
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -29,6 +35,12 @@ class Document(models.Model):
         max_length=20,
         choices=STATUS_CHOICES,
         default="uploaded",
+    )
+    documentation = models.TextField(blank=True, default="")
+    documentation_status = models.CharField(
+        max_length=20,
+        choices=DOCUMENTATION_STATUS_CHOICES,
+        default="none",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

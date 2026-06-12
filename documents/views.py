@@ -17,7 +17,7 @@ from documents.services.router.intent_router import classify_intent
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
-from documents.tasks import process_document_task
+from documents.tasks import generate_documentation_task, process_document_task
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def document_list(request):
 
 @login_required
 def document_status(request):
-    docs = Document.objects.filter(owner=request.user).values("id", "status")
+    docs = Document.objects.filter(owner=request.user).values("id", "status", "documentation_status")
     return JsonResponse({"documents": list(docs)})
 
 
@@ -148,6 +148,22 @@ def document_delete(request, pk):
     document.file.delete(save=False)
     document.delete()
 
+    return redirect("documents:list")
+
+
+@login_required
+def documentation_view(request, pk):
+    document = get_object_or_404(Document, pk=pk, owner=request.user)
+    return render(request, "documents/documentation.html", {"document": document})
+
+
+@login_required
+def generate_documentation_trigger(request, pk):
+    document = get_object_or_404(Document, pk=pk, owner=request.user)
+    if request.method == "POST" and document.status == "processed":
+        document.documentation_status = "processing"
+        document.save(update_fields=["documentation_status"])
+        generate_documentation_task.delay(document.id)
     return redirect("documents:list")
 
 
@@ -232,6 +248,7 @@ def ask_page(request):
         if question:
             mode = classify_intent(question)
             logger.info("router decision: %s", mode)
+            sources = []
             try:
                 if mode == "agent":
                     agent = _build_agent_service(request.user)
@@ -243,6 +260,7 @@ def ask_page(request):
                     ask_service = _build_ask_service()
                     result = ask_service.ask(question=question, user=request.user, top_k=6)
                     answer = result["answer"]
+                    sources = result.get("sources", [])
             except Exception:
                 logger.exception("Ask failed for user %s", request.user.id)
                 answer = "Lo siento..."
@@ -255,6 +273,7 @@ def ask_page(request):
                 {
                     "question": question,
                     "answer": answer,
+                    "sources": sources,
                 }
             )
 

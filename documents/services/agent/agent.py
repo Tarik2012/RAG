@@ -17,6 +17,7 @@ from documents.models import Document
 from documents.services.embeddings.openai_embedding_provider import (
     OpenAIEmbeddingProvider,
 )
+from documents.services.extraction.text_extraction import get_document_full_text
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
@@ -50,28 +51,6 @@ def _get_mcp_tools():
     except Exception as exc:
         logger.warning("No se pudieron cargar las tools MCP: %s", exc)
         return []
-
-
-def _get_document_full_text(document) -> str:
-    stored_file = getattr(document, "file", None)
-    if stored_file:
-        try:
-            stored_file.open("rb")
-            try:
-                stored_file.seek(0)
-                file_text = stored_file.read().decode("utf-8", errors="ignore")
-            finally:
-                stored_file.close()
-            if file_text.strip():
-                return file_text
-        except (FileNotFoundError, OSError):
-            pass  # archivo no disponible -> usar fallback de chunks
-
-    # Last resort only: reconstruct from chunks if the original file is unavailable.
-    chunks = document.chunks.order_by("order").values_list("text", flat=True)
-    return "\n\n".join(chunk for chunk in chunks if chunk)
-
-
 def build_rag_tool(retriever, user):
     @tool
     def search_document(query: str) -> str:
@@ -105,7 +84,7 @@ def build_code_analysis_tool(retriever, user):
                 .values_list("original_name", flat=True)
             )
             return f"No file matching '{document_name}'. Available files: {', '.join(available) or 'none'}."
-        full_text = _get_document_full_text(document)
+        full_text = get_document_full_text(document)
         if not full_text.strip():
             return "No code found in the document"
         MAX_CHARS = 80000
