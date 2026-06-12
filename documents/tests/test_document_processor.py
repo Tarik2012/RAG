@@ -51,6 +51,10 @@ def test_process_document_creates_chunks_and_returns_count(document_factory):
     with patch(
         "documents.services.document_processor.extract_text_from_document",
         return_value=sample_text,
+    ), patch(
+        "documents.services.document_processor.OpenAIEmbeddingProvider",
+    ), patch(
+        "documents.services.document_processor.DocumentEmbedder",
     ):
         count = process_document(document)
 
