@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Levantar db y redis
+        run: docker compose up -d --wait db redis
+
+      - name: Correr tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'ci-dummy-key' }}
+        run: docker compose run --rm -e OPENAI_API_KEY web pytest -q
