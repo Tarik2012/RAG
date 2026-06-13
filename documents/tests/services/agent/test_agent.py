@@ -86,9 +86,11 @@ def test_build_agent_retries_once_then_succeeds(monkeypatch, user):
         reformulations.append(question)
         return f"Reformulated: {question}"
 
+    fake_llm = FakeLLM()
+    fake_rewriter = SimpleNamespace(reformulate=fake_reformulate)
     monkeypatch.setattr(agent, "create_react_agent", lambda *args, **kwargs: FakeReactAgent())
-    monkeypatch.setattr(agent, "_llm", FakeLLM())
-    monkeypatch.setattr(agent._query_rewriter, "reformulate", fake_reformulate)
+    monkeypatch.setattr(agent, "_get_llm", lambda: fake_llm)
+    monkeypatch.setattr(agent, "_get_query_rewriter", lambda: fake_rewriter)
 
     graph = agent.build_agent(user)
     result = graph.invoke({"messages": [HumanMessage(content="Where is the policy?")]})
@@ -127,9 +129,11 @@ def test_build_agent_stops_after_max_retries(monkeypatch, user):
         reformulations.append(question)
         return f"Reformulated: {question}"
 
+    fake_llm = FakeLLM()
+    fake_rewriter = SimpleNamespace(reformulate=fake_reformulate)
     monkeypatch.setattr(agent, "create_react_agent", lambda *args, **kwargs: FakeReactAgent())
-    monkeypatch.setattr(agent, "_llm", FakeLLM())
-    monkeypatch.setattr(agent._query_rewriter, "reformulate", fake_reformulate)
+    monkeypatch.setattr(agent, "_get_llm", lambda: fake_llm)
+    monkeypatch.setattr(agent, "_get_query_rewriter", lambda: fake_rewriter)
 
     graph = agent.build_agent(user)
     result = graph.invoke({"messages": [HumanMessage(content="Explain the bug")]})

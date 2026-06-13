@@ -23,21 +23,46 @@ from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
 
 logger = logging.getLogger(__name__)
-_reranker = CrossEncoderReranker()
-_embedding_provider = OpenAIEmbeddingProvider()
-_query_rewriter = QueryRewriter()
-_llm = ChatOpenAI(
-    model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
-    temperature=0,
-)
-_tavily_tool = TavilySearchResults(max_results=3)
-_MCP_CONFIG = {
-    "github": {
-        "url": "https://api.githubcopilot.com/mcp/",
-        "transport": "streamable_http",
-        "headers": {"Authorization": f"Bearer {os.environ.get('GITHUB_PAT', '')}"},
+
+
+@lru_cache(maxsize=1)
+def _get_reranker():
+    return CrossEncoderReranker()
+
+
+@lru_cache(maxsize=1)
+def _get_embedding_provider():
+    return OpenAIEmbeddingProvider()
+
+
+@lru_cache(maxsize=1)
+def _get_query_rewriter():
+    return QueryRewriter()
+
+
+@lru_cache(maxsize=1)
+def _get_llm():
+    return ChatOpenAI(
+        model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+        temperature=0,
+    )
+
+
+@lru_cache(maxsize=1)
+def _get_tavily_tool():
+    return TavilySearchResults(max_results=3)
+
+
+def _build_mcp_config():
+    return {
+        "github": {
+            "url": "https://api.githubcopilot.com/mcp/",
+            "transport": "streamable_http",
+            "headers": {"Authorization": f"Bearer {os.environ.get('GITHUB_PAT', '')}"},
+        }
     }
-}
+
+
 _MCP_TOOL_ALLOWLIST = {"get_file_contents", "search_code"}
 MAX_RETRIES = 1
 
@@ -45,12 +70,14 @@ MAX_RETRIES = 1
 @lru_cache(maxsize=1)
 def _get_mcp_tools():
     try:
-        client = MultiServerMCPClient(_MCP_CONFIG)
+        client = MultiServerMCPClient(_build_mcp_config())
         tools = list(async_to_sync(client.get_tools)())
         return [t for t in tools if t.name in _MCP_TOOL_ALLOWLIST]
     except Exception as exc:
         logger.warning("No se pudieron cargar las tools MCP: %s", exc)
         return []
+
+
 def build_rag_tool(retriever, user):
     @tool
     def search_document(query: str) -> str:
@@ -109,7 +136,7 @@ def build_tavily_tool():
     def tavily_search(query: str) -> str:
         """Search the web for recent external information when the active document is insufficient."""
         logger.info("tool used: tavily_search")
-        result = _tavily_tool.invoke({"query": query})
+        result = _get_tavily_tool().invoke({"query": query})
         return str(result)
 
     return tavily_search
@@ -123,9 +150,9 @@ class AgentState(TypedDict, total=False):
 
 def build_agent(user):
     retriever = Retriever(
-        embedding_provider=_embedding_provider,
-        query_rewriter=_query_rewriter,
-        reranker=_reranker,
+        embedding_provider=_get_embedding_provider(),
+        query_rewriter=_get_query_rewriter(),
+        reranker=_get_reranker(),
     )
 
     tools = [
@@ -135,7 +162,9 @@ def build_agent(user):
     ]
     tools = tools + _get_mcp_tools()
 
-    react_agent = create_react_agent(_llm, tools, debug=False)
+    llm = _get_llm()
+    query_rewriter = _get_query_rewriter()
+    react_agent = create_react_agent(llm, tools, debug=False)
 
     def run_agent(state: AgentState) -> dict:
         result = async_to_sync(react_agent.ainvoke)({"messages": state["messages"]})
@@ -157,7 +186,7 @@ def build_agent(user):
             "Otherwise output GOOD. Respond with exactly one word: GOOD or RETRY.\n\n"
             f"QUESTION:\n{question}\n\nANSWER:\n{answer}"
         )
-        verdict = (_llm.invoke(grader_prompt).content or "").strip().upper()
+        verdict = (llm.invoke(grader_prompt).content or "").strip().upper()
         answer_ok = verdict.startswith("GOOD")
         logger.debug("reflect verdict=%s answer_ok=%s", verdict, answer_ok)
         return {"answer_ok": answer_ok}
@@ -168,7 +197,7 @@ def build_agent(user):
             (m.content for m in messages if getattr(m, "type", None) == "human"),
             "",
         )
-        reformulated_question = _query_rewriter.reformulate(original_question)
+        reformulated_question = query_rewriter.reformulate(original_question)
         messages.append(HumanMessage(content=reformulated_question))
         retries = state.get("retries", 0) + 1
         logger.debug("reformulate retries=%s", retries)

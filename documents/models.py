@@ -27,6 +27,13 @@ class Document(models.Model):
     )
 
     original_name = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Origen del documento, p.ej. 'github:Tarik2012/RAG'. Vacio para subidas manuales.",
+    )
     file = models.FileField(upload_to="documents/")
     content_type = models.CharField(max_length=100)
     size = models.PositiveBigIntegerField()
