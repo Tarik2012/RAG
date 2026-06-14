@@ -10,7 +10,7 @@ pytestmark = pytest.mark.django_db
 
 
 class TestEmbeddingProvider:
-    DIMENSION = 8
+    DIMENSION = 1536
 
     def embed_texts(self, texts):
         embeddings = []
@@ -68,6 +68,7 @@ def test_document_embedder_embeds_all_pending_chunks(document, chunks):
     for chunk in DocumentChunk.objects.all():
         assert chunk.embedding_status == "embedded"
         assert chunk.embedding is not None
+        assert chunk.embedding_vector is not None
         assert chunk.embedding_model == "fake-model"
         assert chunk.embedded_at is not None
 

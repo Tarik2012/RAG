@@ -14,6 +14,15 @@ class OpenAILLMProvider(LLMProvider):
             raise RuntimeError("OPENAI_API_KEY is not set")
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
+    def complete(self, *, instructions: str, input: str) -> str:
+        response = self.client.responses.create(
+            model=settings.OPENAI_MODEL,
+            instructions=instructions,
+            input=input,
+        )
+
+        return response.output_text
+
     def generate(self, *, question: str, context: str) -> str:
         instructions = (
             "You are a RAG assistant. "
@@ -31,10 +40,4 @@ class OpenAILLMProvider(LLMProvider):
             f"QUESTION:\n{question}\n"
         )
 
-        response = self.client.responses.create(
-            model=settings.OPENAI_MODEL,
-            instructions=instructions,
-            input=prompt,
-        )
-
-        return response.output_text
+        return self.complete(instructions=instructions, input=prompt)

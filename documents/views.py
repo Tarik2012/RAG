@@ -1,7 +1,8 @@
 import logging
 import json
-from pathlib import Path
+import re
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -14,17 +15,13 @@ from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
 from documents.services.llm.openai_llm_provider import OpenAILLMProvider
+from documents.services.router.intent_router import classify_intent
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
-from documents.tasks import process_document_task
+from documents.tasks import generate_documentation_task, ingest_repo_task, process_document_task
 
 logger = logging.getLogger(__name__)
-CODE_EXTENSIONS = {
-    ".py", ".js", ".ts", ".java", ".cs", ".cpp", ".go", ".rb",
-    ".php", ".swift", ".kt", ".html", ".htm", ".css",
-    ".json", ".xml", ".yaml", ".yml", ".md", ".txt", ".rst",
-}
 
 
 def _build_ask_service() -> AskService:
@@ -49,37 +46,20 @@ def _build_agent_service(user):
     return build_agent(user)
 
 
-def _get_active_document(user):
-    return Document.objects.filter(
-        owner=user,
-        is_active=True,
-        status="processed",
-    ).first()
-
-
 def _build_agent_messages(*, user, question: str) -> list[dict[str, str]]:
-    active_document = _get_active_document(user)
-    if active_document is None:
-        system_content = (
-            "No hay un documento activo procesado para este usuario. "
-            "Si necesitas contenido del documento, la herramienta puede no encontrar resultados."
-        )
+    nombres = list(
+        Document.objects.filter(owner=user, status="processed")
+        .values_list("original_name", flat=True)
+    )
+    if not nombres:
+        system_content = "El usuario no tiene documentos procesados; search_document puede no encontrar resultados."
     else:
-        source_name = active_document.original_name or active_document.file.name or ""
-        extension = Path(source_name).suffix.lower() or "unknown"
-        content_type = active_document.content_type or "unknown"
-        is_code_document = extension in CODE_EXTENSIONS
-        document_kind = "código" if is_code_document else "documento"
-
         system_content = (
-            f"El documento activo del usuario es '{active_document.original_name}' "
-            f"(tipo {content_type}, extensión {extension}). "
-            f"Este documento debe tratarse como {document_kind}. "
-            "Regla de enrutado: "
-            "si el documento activo es código (.py, .js, .ts, etc.) y la pregunta trata sobre "
-            "errores, mejoras, funciones, refactorización, revisión o seguridad del código, "
-            "usa analyze_code. "
-            "Si el documento activo es un documento normal (PDF, texto, CSV, etc.), usa search_document."
+            f"El usuario tiene estos documentos: {', '.join(nombres)}. "
+            "Para preguntas sobre el contenido, usa search_document (busca en todos). "
+            "Para analizar, revisar, documentar o auditar un archivo de código concreto, usa "
+            "analyze_code indicando el nombre del archivo en document_name. "
+            "Usa tavily_search solo para información externa o de actualidad."
         )
 
     return [
@@ -126,6 +106,12 @@ def document_list(request):
 
 
 @login_required
+def document_status(request):
+    docs = Document.objects.filter(owner=request.user).values("id", "status", "documentation_status")
+    return JsonResponse({"documents": list(docs)})
+
+
+@login_required
 def document_upload(request):
     if request.method == "POST":
         form = DocumentUploadForm(request.POST, request.FILES)
@@ -154,15 +140,19 @@ def document_upload(request):
 
 @login_required
 @require_POST
-def document_activate(request, pk):
-    document = get_object_or_404(
-        Document,
-        pk=pk,
-        owner=request.user,
-    )
-
-    Document.set_active_for_user(document=document)
-
+def repo_ingest(request):
+    raw = (request.POST.get("repo_full") or "").strip()
+    raw = re.sub(r"^https?://", "", raw, flags=re.I)
+    raw = re.sub(r"^(www\.)?github\.com/", "", raw, flags=re.I)
+    parts = [p for p in raw.split("/") if p]
+    if len(parts) < 2:
+        messages.error(request, "Formato invalido. Usa owner/repo o la URL del repo, p. ej. Tarik2012/RAG.")
+        return redirect("documents:list")
+    owner = parts[0]
+    repo = parts[1].removesuffix(".git")
+    branch = (request.POST.get("branch") or "").strip() or None
+    ingest_repo_task.delay(owner, repo, request.user.id, branch)
+    messages.success(request, f"Ingesta de {owner}/{repo} iniciada. Los archivos iran apareciendo en la lista.")
     return redirect("documents:list")
 
 
@@ -178,6 +168,22 @@ def document_delete(request, pk):
     document.file.delete(save=False)
     document.delete()
 
+    return redirect("documents:list")
+
+
+@login_required
+def documentation_view(request, pk):
+    document = get_object_or_404(Document, pk=pk, owner=request.user)
+    return render(request, "documents/documentation.html", {"document": document})
+
+
+@login_required
+def generate_documentation_trigger(request, pk):
+    document = get_object_or_404(Document, pk=pk, owner=request.user)
+    if request.method == "POST" and document.status == "processed":
+        document.documentation_status = "processing"
+        document.save(update_fields=["documentation_status"])
+        generate_documentation_task.delay(document.id)
     return redirect("documents:list")
 
 
@@ -203,10 +209,10 @@ def ask_view(request):
         )
     except Exception:
         logger.exception("Agent failed for user %s", request.user.id)
-        result = {
-            "question": question,
-            "answer": "Lo siento...",
-        }
+        return JsonResponse(
+            {"error": "Internal error processing the question"},
+            status=500,
+        )
 
     return JsonResponse(result, status=200)
 
@@ -228,11 +234,14 @@ def agent_view(request):
         agent = _build_agent_service(request.user)
         result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
         tool_names = _extract_called_tools(result)
-        print(">>> TOOLS CALLED:", tool_names, flush=True)
+        logger.info("tools called: %s", tool_names)
         answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
     except Exception:
         logger.exception("Agent failed for user %s", request.user.id)
-        answer = "Lo siento..."
+        return JsonResponse(
+            {"error": "Internal error processing the question"},
+            status=500,
+        )
 
     return JsonResponse(
         {
@@ -257,13 +266,15 @@ def ask_page(request):
         question = request.POST.get("question", "").strip()
 
         if question:
+            sources = []
             try:
                 agent = _build_agent_service(request.user)
                 result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
                 tool_names = _extract_called_tools(result)
-                print(">>> TOOLS CALLED:", tool_names, flush=True)
+                logger.info("tools called: %s", tool_names)
                 answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
             except Exception:
+                logger.exception("Ask failed for user %s", request.user.id)
                 answer = "Lo siento..."
 
             history = request.session.get("chat_history", [])
@@ -274,6 +285,7 @@ def ask_page(request):
                 {
                     "question": question,
                     "answer": answer,
+                    "sources": sources,
                 }
             )
 

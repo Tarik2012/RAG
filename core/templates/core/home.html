@@ -1,63 +1,46 @@
 {% extends "core/base.html" %}
 
-{% block title %}Home | RAG Backend{% endblock %}
+{% block title %}Dashboard | TariTech{% endblock %}
 
 {% block content %}
-  <section class="bg-white rounded-lg shadow-sm border p-8">
-    <h2 class="text-2xl font-semibold mb-2">
-      Private Knowledge Assistant
-    </h2>
+{% if user.is_authenticated %}
+  <div class="mb-8">
+    <h1 class="text-2xl font-semibold text-gray-900">Welcome back, {{ user.username }}</h1>
+    <p class="mt-1 text-sm text-gray-500">Your private knowledge base at a glance.</p>
+  </div>
 
-    <p class="text-gray-600 mb-6">
-      This system allows you to upload internal documents and query them
-      using a controlled AI assistant. All responses are generated strictly
-      from your uploaded content.
-    </p>
-
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-      <!-- Documents -->
-      <div class="border rounded-lg p-6 hover:shadow transition">
-        <h3 class="font-medium text-lg mb-2">
-          Documents
-        </h3>
-        <p class="text-sm text-gray-600 mb-4">
-          Upload and manage PDF or Excel files that will be used as the
-          knowledge base for the assistant.
-        </p>
-        <span class="text-sm text-accent font-medium">
-          Available soon
-        </span>
-      </div>
-
-      <!-- Questions -->
-      <div class="border rounded-lg p-6 hover:shadow transition">
-        <h3 class="font-medium text-lg mb-2">
-          Ask Questions
-        </h3>
-        <p class="text-sm text-gray-600 mb-4">
-          Ask natural language questions and receive answers grounded
-          exclusively in your documents.
-        </p>
-        <span class="text-sm text-accent font-medium">
-          Available soon
-        </span>
-      </div>
-
-      <!-- System -->
-      <div class="border rounded-lg p-6 hover:shadow transition">
-        <h3 class="font-medium text-lg mb-2">
-          System Status
-        </h3>
-        <p class="text-sm text-gray-600 mb-4">
-          Monitor ingestion, embeddings, and system readiness before
-          querying documents.
-        </p>
-        <span class="text-sm text-accent font-medium">
-          Available soon
-        </span>
-      </div>
-
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <div class="text-sm text-gray-500">Total documents</div>
+      <div class="mt-2 text-3xl font-semibold text-gray-900">{{ total_documents }}</div>
     </div>
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <div class="text-sm text-gray-500">Processed</div>
+      <div class="mt-2 text-3xl font-semibold text-gray-900">{{ processed_documents }}</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+      <div class="text-sm text-gray-500">Fragmentos indexados</div>
+      <div class="mt-2 text-3xl font-semibold text-gray-900">{{ total_chunks }}</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <a href="{% url 'documents:list' %}" class="block bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow transition">
+      <h3 class="font-medium text-lg text-gray-900 mb-1">Documents</h3>
+      <p class="text-sm text-gray-600">Upload, activate and manage the files that power your assistant.</p>
+      <span class="mt-3 inline-block text-sm text-accent font-medium">Go to documents &rarr;</span>
+    </a>
+    <a href="{% url 'documents:ask_ui' %}" class="block bg-white border border-gray-200 rounded-xl shadow-sm p-6 hover:shadow transition">
+      <h3 class="font-medium text-lg text-gray-900 mb-1">Ask AI</h3>
+      <p class="text-sm text-gray-600">Ask questions answered from your active document and the web.</p>
+      <span class="mt-3 inline-block text-sm text-accent font-medium">Start asking &rarr;</span>
+    </a>
+  </div>
+{% else %}
+  <section class="bg-white rounded-xl shadow-sm border p-10 text-center max-w-2xl mx-auto">
+    <h1 class="text-2xl font-semibold text-gray-900 mb-2">Private Knowledge Assistant</h1>
+    <p class="text-gray-600 mb-6">Upload your documents and query them with an AI assistant grounded in your content.</p>
+    <a href="{% url 'login' %}?next=/" class="inline-block bg-accent text-white px-5 py-2.5 rounded-md text-sm font-medium hover:bg-blue-500 transition">Log in to start</a>
   </section>
+{% endif %}
 {% endblock %}

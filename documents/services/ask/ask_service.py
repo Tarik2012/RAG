@@ -20,7 +20,7 @@ class AskService:
         *,
         question: str,
         user,
-        top_k: int = 5,
+        top_k: int = 10,
     ) -> Dict:
         results = self.retriever.retrieve(
             query=question,
@@ -32,24 +32,33 @@ class AskService:
             return {
                 "question": question,
                 "answer": (
-                    "No tengo información suficiente en el documento activo "
+                    "No tengo información suficiente en tus documentos "
                     "para responder a esta pregunta."
                 ),
                 "context": "",
                 "chunks_used": 0,
+                "sources": [],
             }
 
-        context_chunks: List[str] = [chunk.text for chunk, _ in results]
+        context_chunks: List[str] = [
+            f"[Archivo: {chunk.document.original_name} | fragmento {chunk.order}]\n{chunk.text}"
+            for chunk, _ in results
+        ]
         context = "\n\n".join(context_chunks)
 
         answer = self.llm_provider.generate(
             question=question,
             context=context,
         )
+        sources = [
+            {"file": chunk.document.original_name, "fragment": chunk.order}
+            for chunk, _ in results
+        ]
 
         return {
             "question": question,
             "answer": answer,
             "context": context,
             "chunks_used": len(context_chunks),
+            "sources": sources,
         }

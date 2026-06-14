@@ -1,0 +1,67 @@
+{% extends "core/base.html" %}
+
+{% block title %}Documentación — {{ document.original_name }}{% endblock %}
+
+{% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+<style>
+  #doc-content h1 { font-size: 1.5rem; font-weight: 700; margin: 1.25rem 0 .5rem; color: #111827; }
+  #doc-content h2 { font-size: 1.2rem; font-weight: 600; margin: 1.25rem 0 .5rem; color: #1f2937; border-bottom: 1px solid #f3f4f6; padding-bottom: .25rem; }
+  #doc-content h3 { font-size: 1.05rem; font-weight: 600; margin: 1rem 0 .4rem; color: #374151; }
+  #doc-content p  { margin: .5rem 0; color: #374151; line-height: 1.6; }
+  #doc-content ul { list-style: disc; margin: .5rem 0 .75rem 1.5rem; }
+  #doc-content li { margin: .25rem 0; color: #374151; }
+  #doc-content code { background: #f3f4f6; padding: .1rem .35rem; border-radius: .25rem; font-size: .85em; }
+  #doc-content strong { font-weight: 600; color: #111827; }
+</style>
+
+<div class="space-y-6">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <a
+        href="{% url 'documents:list' %}"
+        class="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-700 transition"
+      >
+        ← Volver a documentos
+      </a>
+      <h2 class="mt-3 text-2xl font-semibold text-gray-800">
+        Documentación — {{ document.original_name }}
+      </h2>
+    </div>
+  </div>
+
+  {% if document.documentation_status == "ready" %}
+    {{ document.documentation|json_script:"doc-markdown" }}
+    <div class="bg-white shadow rounded-md overflow-hidden">
+      <div class="border-b border-gray-100 px-6 py-4">
+        <p class="text-sm text-gray-500">
+          Documentación técnica generada para este archivo.
+        </p>
+      </div>
+      <div class="px-6 py-6">
+        <div id="doc-content" class="prose max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700"></div>
+      </div>
+    </div>
+    <script>
+      const md = JSON.parse(document.getElementById('doc-markdown').textContent);
+      document.getElementById('doc-content').innerHTML = marked.parse(md);
+    </script>
+  {% elif document.documentation_status == "processing" %}
+    <div class="bg-white shadow rounded-md overflow-hidden">
+      <div class="px-6 py-5 text-sm text-gray-600">
+        Generando documentación…
+      </div>
+    </div>
+  {% elif document.documentation_status == "failed" %}
+    <div class="rounded-md bg-red-100 px-6 py-4 text-sm text-red-700">
+      No se pudo generar la documentación para este archivo.
+    </div>
+  {% else %}
+    <div class="bg-white shadow rounded-md overflow-hidden">
+      <div class="px-6 py-5 text-sm text-gray-600">
+        Aún no se ha generado documentación para este archivo.
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

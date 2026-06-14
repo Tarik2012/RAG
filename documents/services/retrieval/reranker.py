@@ -1,4 +1,11 @@
+from functools import lru_cache
+
 from sentence_transformers import CrossEncoder
+
+
+@lru_cache(maxsize=2)
+def _load_cross_encoder(model_name: str):
+    return CrossEncoder(model_name)
 
 
 class CrossEncoderReranker:
@@ -6,7 +13,7 @@ class CrossEncoderReranker:
         self,
         model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",
     ) -> None:
-        self.model = CrossEncoder(model_name)
+        self.model = _load_cross_encoder(model_name)
 
     def rerank(self, query: str, chunks: list[str]) -> list[str]:
         if not chunks:

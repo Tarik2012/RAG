@@ -1,7 +1,7 @@
 from django.conf import settings
-from django.db import models, transaction
-from django.db.models import Q
+from django.db import models
 from django.utils import timezone
+from pgvector.django import HnswIndex, VectorField
 
 import hashlib
 
@@ -13,6 +13,12 @@ class Document(models.Model):
         ("processed", "Processed"),
         ("failed", "Failed"),
     ]
+    DOCUMENTATION_STATUS_CHOICES = [
+        ("none", "None"),
+        ("processing", "Processing"),
+        ("ready", "Ready"),
+        ("failed", "Failed"),
+    ]
 
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -21,6 +27,13 @@ class Document(models.Model):
     )
 
     original_name = models.CharField(max_length=255)
+    source = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Origen del documento, p.ej. 'github:Tarik2012/RAG'. Vacio para subidas manuales.",
+    )
     file = models.FileField(upload_to="documents/")
     content_type = models.CharField(max_length=100)
     size = models.PositiveBigIntegerField()
@@ -30,43 +43,17 @@ class Document(models.Model):
         choices=STATUS_CHOICES,
         default="uploaded",
     )
-
-    #  Documento activo (clave del diseño)
-    is_active = models.BooleanField(default=False, db_index=True)
+    documentation = models.TextField(blank=True, default="")
+    documentation_status = models.CharField(
+        max_length=20,
+        choices=DOCUMENTATION_STATUS_CHOICES,
+        default="none",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["owner"],
-                condition=Q(is_active=True),
-                name="unique_active_document_per_owner",
-            )
-        ]
-
     def __str__(self) -> str:
         return self.original_name
-
-    @classmethod
-    def set_active_for_user(cls, *, document: "Document"):
-        """
-        Marca este documento como activo y desactiva los demás del usuario.
-        """
-        with transaction.atomic():
-            locked_queryset = cls.objects.select_for_update().filter(
-                owner=document.owner
-            )
-            locked_document = locked_queryset.get(id=document.id)
-
-            if locked_document.status != "processed":
-                raise ValueError("Only processed documents can be activated.")
-
-            locked_queryset.exclude(id=locked_document.id).update(is_active=False)
-
-            if not locked_document.is_active:
-                locked_document.is_active = True
-                locked_document.save(update_fields=["is_active"])
 
 
 class DocumentChunk(models.Model):
@@ -89,6 +76,7 @@ class DocumentChunk(models.Model):
     text_hash = models.CharField(max_length=64, db_index=True)
 
     embedding = models.JSONField(null=True, blank=True)
+    embedding_vector = VectorField(dimensions=1536, null=True, blank=True)
 
     embedding_status = models.CharField(
         max_length=20,
@@ -107,6 +95,15 @@ class DocumentChunk(models.Model):
             models.UniqueConstraint(
                 fields=["document", "order"],
                 name="unique_chunk_order_per_document",
+            )
+        ]
+        indexes = [
+            HnswIndex(
+                fields=["embedding_vector"],
+                name="docchunk_embed_vector_hnsw_idx",
+                opclasses=["vector_cosine_ops"],
+                m=16,
+                ef_construction=64,
             )
         ]
 
