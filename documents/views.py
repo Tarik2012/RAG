@@ -1,5 +1,5 @@
-import logging
 import json
+import logging
 import re
 
 from django.contrib import messages
@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
 from .forms import DocumentUploadForm
-from .models import Document
+from documents.models import Conversation, Document, Message
 from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
@@ -46,26 +46,51 @@ def _build_agent_service(user):
     return build_agent(user)
 
 
-def _build_agent_messages(*, user, question: str) -> list[dict[str, str]]:
+FOLLOW_UP_PREFIXES = (
+    "y ", "and ", "tambien", "tambien", "entonces",
+    "ok", "vale", "bien", "ahora", "sobre eso",
+    "de eso", "de ese", "de esa",
+)
+
+FOLLOW_UP_REFERENCES = (
+    "este archivo", "ese archivo", "este codigo", "ese codigo",
+    "esto", "eso", "lo anterior", "la anterior", "anterior",
+)
+
+
+def _looks_like_follow_up(question: str) -> bool:
+    normalized = question.strip().lower()
+    if not normalized:
+        return False
+    if normalized.startswith(FOLLOW_UP_PREFIXES):
+        return True
+    return any(ref in normalized for ref in FOLLOW_UP_REFERENCES)
+
+
+def _build_agent_messages(*, user, question: str, history: list | None = None) -> list[dict]:
     nombres = list(
         Document.objects.filter(owner=user, status="processed")
         .values_list("original_name", flat=True)
     )
     if not nombres:
-        system_content = "El usuario no tiene documentos procesados; search_document puede no encontrar resultados."
+        system_content = "El usuario no tiene documentos procesados."
     else:
         system_content = (
             f"El usuario tiene estos documentos: {', '.join(nombres)}. "
-            "Para preguntas sobre el contenido, usa search_document (busca en todos). "
-            "Para analizar, revisar, documentar o auditar un archivo de código concreto, usa "
-            "analyze_code indicando el nombre del archivo en document_name. "
-            "Usa tavily_search solo para información externa o de actualidad."
+            "Para preguntas sobre el contenido usa search_document. "
+            "Para analizar un archivo de codigo concreto usa analyze_code con document_name. "
+            "Usa tavily_search solo para informacion externa."
         )
 
-    return [
-        {"role": "system", "content": system_content},
-        {"role": "user", "content": question},
-    ]
+    messages: list[dict] = [{"role": "system", "content": system_content}]
+
+    if _looks_like_follow_up(question):
+        recent_history = (history or [])[-6:]
+        for turn in recent_history:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+
+    messages.append({"role": "user", "content": question})
+    return messages
 
 
 def _extract_called_tools(result) -> list[str]:
@@ -91,7 +116,7 @@ def _append_tools_to_answer(answer: str, tool_names: list[str]) -> str:
         return answer
 
     tools_label = ", ".join(tool_names)
-    return f"{answer}\n\n🔧 Tools usadas: {tools_label}"
+    return f"{answer}\n\nTools usadas: {tools_label}"
 
 
 @login_required
@@ -254,54 +279,63 @@ def agent_view(request):
 
 @login_required
 def ask_page(request):
-    if request.GET.get("clear") == "1":
-        request.session.pop("chat_history", None)
-        return redirect("documents:ask_ui")
+    conversation_id = request.session.get("conversation_id")
+    if conversation_id:
+        conversation = Conversation.objects.filter(id=conversation_id, user=request.user).first()
+    else:
+        conversation = None
+    if not conversation:
+        conversation = Conversation.objects.create(user=request.user)
+        request.session["conversation_id"] = conversation.id
 
     if request.method == "POST":
-        if request.POST.get("clear") == "1":
-            request.session.pop("chat_history", None)
+        action = request.POST.get("action", "ask")
+
+        if action == "clear":
+            conversation = Conversation.objects.create(user=request.user)
+            request.session["conversation_id"] = conversation.id
             return redirect("documents:ask_ui")
 
         question = request.POST.get("question", "").strip()
+        if not question:
+            return redirect("documents:ask_ui")
 
-        if question:
-            sources = []
-            try:
-                agent = _build_agent_service(request.user)
-                result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
-                tool_names = _extract_called_tools(result)
-                logger.info("tools called: %s", tool_names)
-                answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
-            except Exception:
-                logger.exception("Ask failed for user %s", request.user.id)
-                answer = "Lo siento..."
-
-            history = request.session.get("chat_history", [])
-            if not isinstance(history, list):
-                history = []
-
-            history.append(
-                {
-                    "question": question,
-                    "answer": answer,
-                    "sources": sources,
-                }
+        try:
+            history = list(
+                conversation.messages
+                .order_by("-created_at")
+                .values("role", "content")[:6]
             )
+            history.reverse()
+            agent = _build_agent_service(request.user)
+            result = agent.invoke(
+                {"messages": _build_agent_messages(
+                    user=request.user,
+                    question=question,
+                    history=history,
+                )}
+            )
+            tool_names = _extract_called_tools(result)
+            logger.info("tools called: %s", tool_names)
+            answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
+        except Exception:
+            logger.exception("Agent error")
+            answer = "Lo siento, ocurrio un error al procesar tu pregunta."
+            tool_names = []
 
-            request.session["chat_history"] = history
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.ROLE_USER,
+            content=question,
+        )
+        Message.objects.create(
+            conversation=conversation,
+            role=Message.ROLE_ASSISTANT,
+            content=answer,
+            tool_calls=tool_names,
+        )
 
         return redirect("documents:ask_ui")
 
-    history = request.session.get("chat_history", [])
-    if not isinstance(history, list):
-        history = []
-
-    return render(
-        request,
-        "documents/ask.html",
-        {
-            "history": history,
-            "question": "",
-        },
-    )
+    history = list(conversation.messages.order_by("created_at"))
+    return render(request, "documents/ask.html", {"history": history})
