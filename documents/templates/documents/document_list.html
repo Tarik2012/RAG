@@ -19,6 +19,29 @@
   </a>
 </div>
 
+<form method="post" action="{% url 'documents:repo_ingest' %}" class="mb-6 flex flex-col gap-3 rounded-md bg-white p-4 shadow sm:flex-row sm:items-center">
+  {% csrf_token %}
+  <input
+    type="text"
+    name="repo_full"
+    placeholder="owner/repo (ej: Tarik2012/RAG)"
+    required
+    class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+  >
+  <input
+    type="text"
+    name="branch"
+    placeholder="rama (opcional, ej: feature/mcp-client)"
+    class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+  >
+  <button
+    type="submit"
+    class="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+  >
+    Ingerir repo de GitHub
+  </button>
+</form>
+
 <div class="bg-white shadow rounded-md overflow-hidden">
   <table class="w-full text-sm">
     <thead class="bg-gray-100 text-gray-600">

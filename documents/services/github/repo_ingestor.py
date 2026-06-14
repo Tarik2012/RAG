@@ -4,11 +4,11 @@ from documents.models import Document
 from documents.services.github.repo_reader import fetch_file_content
 
 
-def ingest_repo_file(*, owner: str, repo: str, path: str, user) -> Document:
+def ingest_repo_file(*, owner: str, repo: str, path: str, user, branch: str | None = None) -> Document:
     """Crea un Document a partir de un archivo del repo y lanza su ingesta."""
     from documents.tasks import process_document_task
 
-    content = fetch_file_content(owner, repo, path)
+    content = fetch_file_content(owner, repo, path, branch)
     document = Document(
         owner=user,
         original_name=f"{repo}/{path}",

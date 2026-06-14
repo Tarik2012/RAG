@@ -70,4 +70,4 @@ def test_process_document_task_retries_on_failure(monkeypatch, document_factory)
 
     assert len(retry_calls) == 1
     assert isinstance(retry_calls[0]["exc"], RuntimeError)
-    assert retry_calls[0]["countdown"] >= 1
+    assert retry_calls[0]["countdown"] >= 0

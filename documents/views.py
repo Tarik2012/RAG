@@ -1,6 +1,8 @@
 import logging
 import json
+import re
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,7 +19,7 @@ from documents.services.router.intent_router import classify_intent
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
-from documents.tasks import generate_documentation_task, process_document_task
+from documents.tasks import generate_documentation_task, ingest_repo_task, process_document_task
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +140,24 @@ def document_upload(request):
 
 @login_required
 @require_POST
+def repo_ingest(request):
+    raw = (request.POST.get("repo_full") or "").strip()
+    raw = re.sub(r"^https?://", "", raw, flags=re.I)
+    raw = re.sub(r"^(www\.)?github\.com/", "", raw, flags=re.I)
+    parts = [p for p in raw.split("/") if p]
+    if len(parts) < 2:
+        messages.error(request, "Formato invalido. Usa owner/repo o la URL del repo, p. ej. Tarik2012/RAG.")
+        return redirect("documents:list")
+    owner = parts[0]
+    repo = parts[1].removesuffix(".git")
+    branch = (request.POST.get("branch") or "").strip() or None
+    ingest_repo_task.delay(owner, repo, request.user.id, branch)
+    messages.success(request, f"Ingesta de {owner}/{repo} iniciada. Los archivos iran apareciendo en la lista.")
+    return redirect("documents:list")
+
+
+@login_required
+@require_POST
 def document_delete(request, pk):
     document = get_object_or_404(
         Document,
@@ -246,21 +266,13 @@ def ask_page(request):
         question = request.POST.get("question", "").strip()
 
         if question:
-            mode = classify_intent(question)
-            logger.info("router decision: %s", mode)
             sources = []
             try:
-                if mode == "agent":
-                    agent = _build_agent_service(request.user)
-                    result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
-                    tool_names = _extract_called_tools(result)
-                    logger.info("tools called: %s", tool_names)
-                    answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
-                else:
-                    ask_service = _build_ask_service()
-                    result = ask_service.ask(question=question, user=request.user, top_k=6)
-                    answer = result["answer"]
-                    sources = result.get("sources", [])
+                agent = _build_agent_service(request.user)
+                result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
+                tool_names = _extract_called_tools(result)
+                logger.info("tools called: %s", tool_names)
+                answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
             except Exception:
                 logger.exception("Ask failed for user %s", request.user.id)
                 answer = "Lo siento..."

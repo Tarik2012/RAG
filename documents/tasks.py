@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from documents.models import Document
 from documents.services.document_processor import process_document
 from documents.services.github.repo_ingestor import ingest_repo_file
-from documents.services.github.repo_reader import list_repo_code_files
+from documents.services.github.repo_reader import get_default_branch, list_repo_code_files
 from documents.services.documentation.documentation_service import DocumentationService
 from documents.services.llm.openai_llm_provider import OpenAILLMProvider
 
@@ -60,14 +60,17 @@ def generate_documentation_task(self, document_id: int):
         raise
 
 
-@shared_task(bind=True)
-def ingest_repo_task(self, owner: str, repo: str, user_id: int) -> int:
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
+def ingest_repo_task(self, owner: str, repo: str, user_id: int, branch: str | None = None) -> int:
     user = get_user_model().objects.get(id=user_id)
-    paths = list_repo_code_files(owner, repo)
+    branch = branch or get_default_branch(owner, repo)
+    source = f"github:{owner}/{repo}"
+    Document.objects.filter(owner=user, source=source).delete()
+    paths = list_repo_code_files(owner, repo, branch)
     created = 0
     for path in paths:
         try:
-            ingest_repo_file(owner=owner, repo=repo, path=path, user=user)
+            ingest_repo_file(owner=owner, repo=repo, path=path, user=user, branch=branch)
             created += 1
         except Exception:
             logger.exception("Fallo al ingerir %s de %s/%s", path, owner, repo)
