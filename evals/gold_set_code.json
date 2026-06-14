@@ -1,0 +1,14 @@
+[
+  { "question": "¿Qué clase representa un producto del catálogo?", "expected_snippets": ["class Producto"] },
+  { "question": "¿Qué método calcula el precio con IVA?", "expected_snippets": ["def precio_con_iva"] },
+  { "question": "¿Qué clase gestiona el stock de productos?", "expected_snippets": ["class Inventario"] },
+  { "question": "¿Qué método descuenta stock del inventario?", "expected_snippets": ["def descontar_stock"] },
+  { "question": "¿Qué clase gestiona los clientes?", "expected_snippets": ["class GestorClientes"] },
+  { "question": "¿Qué método comprueba si un cliente es VIP?", "expected_snippets": ["def es_vip"] },
+  { "question": "¿Qué función calcula el descuento de un pedido?", "expected_snippets": ["def calcular_descuento"] },
+  { "question": "¿Qué clase procesa los pedidos?", "expected_snippets": ["class ProcesadorPedidos"] },
+  { "question": "¿Dónde se construye SQL por concatenación con riesgo de inyección?", "expected_snippets": ["INSERT INTO pedidos"] },
+  { "question": "¿Qué función conecta con la base de datos?", "expected_snippets": ["def conectar_db"] },
+  { "question": "¿Qué función genera la factura?", "expected_snippets": ["def generar_factura"] },
+  { "question": "¿Qué función carga el catálogo desde un archivo JSON?", "expected_snippets": ["def cargar_catalogo"] }
+]

@@ -1,0 +1,107 @@
+{% extends "core/base.html" %}
+
+{% block title %}Crear cuenta | TariTech{% endblock %}
+
+{% block content %}
+<div class="flex justify-center items-center min-h-[60vh]">
+
+  <section class="w-full max-w-sm bg-white border rounded-lg shadow-sm px-8 py-10">
+
+    <header class="mb-8 text-center">
+      <h1 class="text-xl font-semibold tracking-tight text-gray-900">
+        Crear cuenta
+      </h1>
+    </header>
+
+    <form method="post" class="space-y-5">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      <div>
+        <label
+          for="{{ form.username.id_for_label }}"
+          class="block text-xs font-medium uppercase tracking-wide text-gray-600 mb-1"
+        >
+          {{ form.username.label }}
+        </label>
+        <input
+          type="text"
+          name="{{ form.username.html_name }}"
+          id="{{ form.username.id_for_label }}"
+          value="{{ form.username.value|default_if_none:'' }}"
+          required
+          autofocus
+          class="block w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-accent focus:ring-accent"
+        />
+        {% if form.username.errors %}
+          <div class="mt-2 text-sm text-red-700">
+            {{ form.username.errors }}
+          </div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label
+          for="{{ form.password1.id_for_label }}"
+          class="block text-xs font-medium uppercase tracking-wide text-gray-600 mb-1"
+        >
+          {{ form.password1.label }}
+        </label>
+        <input
+          type="password"
+          name="{{ form.password1.html_name }}"
+          id="{{ form.password1.id_for_label }}"
+          required
+          class="block w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-accent focus:ring-accent"
+        />
+        {% if form.password1.errors %}
+          <div class="mt-2 text-sm text-red-700">
+            {{ form.password1.errors }}
+          </div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label
+          for="{{ form.password2.id_for_label }}"
+          class="block text-xs font-medium uppercase tracking-wide text-gray-600 mb-1"
+        >
+          {{ form.password2.label }}
+        </label>
+        <input
+          type="password"
+          name="{{ form.password2.html_name }}"
+          id="{{ form.password2.id_for_label }}"
+          required
+          class="block w-full rounded-md border-gray-300 px-3 py-2 text-sm focus:border-accent focus:ring-accent"
+        />
+        {% if form.password2.errors %}
+          <div class="mt-2 text-sm text-red-700">
+            {{ form.password2.errors }}
+          </div>
+        {% endif %}
+      </div>
+
+      <button
+        type="submit"
+        class="w-full rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition"
+      >
+        Registrarse
+      </button>
+    </form>
+
+    <p class="mt-6 text-center text-sm text-gray-500">
+      Ya tienes cuenta?
+      <a href="{% url 'login' %}" class="text-accent hover:underline">
+        Inicia sesion
+      </a>
+    </p>
+
+  </section>
+
+</div>
+{% endblock %}

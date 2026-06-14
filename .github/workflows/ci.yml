@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Crear .env para CI
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'ci-dummy-key' }}
+        run: |
+          {
+            echo "SECRET_KEY=ci-secret-key"
+            echo "DEBUG=True"
+            echo "ALLOWED_HOSTS=*"
+            echo "DB_NAME=ragdb"
+            echo "DB_USER=raguser"
+            echo "DB_PASSWORD=ragpass"
+            echo "DB_HOST=db"
+            echo "DB_PORT=5432"
+            echo "OPENAI_API_KEY=${OPENAI_API_KEY}"
+            echo "OPENAI_MODEL=gpt-4o-mini"
+            echo "RAG_LLM_PROVIDER=openai"
+            echo "TAVILY_API_KEY=ci-dummy-tavily"
+            echo "CELERY_BROKER_URL=redis://redis:6379/0"
+            echo "GITHUB_PAT=ci-dummy-pat"
+          } > .env
+
+      - name: Levantar db y redis
+        run: docker compose up -d --wait db redis
+
+      - name: Correr tests
+        run: docker compose run --rm web pytest -q

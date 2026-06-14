@@ -75,9 +75,9 @@
             Internal platform
           </span>
 
-          {% if user.is_authenticated %}
+          {% if request.user.is_authenticated %}
             <span class="text-slate-300">
-              {{ user.username }}
+              {{ request.user.username }}
             </span>
 
             <a
@@ -88,10 +88,17 @@
             </a>
           {% else %}
             <a
+              href="{% url 'core:signup' %}"
+              class="text-slate-300 hover:text-white transition"
+            >
+              Registrarse
+            </a>
+
+            <a
               href="{% url 'login' %}?next=/"
               class="text-slate-300 hover:text-white transition"
             >
-              Conectarse
+              Iniciar sesion
             </a>
           {% endif %}
         </div>
