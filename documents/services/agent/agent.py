@@ -78,29 +78,41 @@ def _get_mcp_tools():
         return []
 
 
-def build_rag_tool(retriever, user):
+def build_search_tool(retriever, user):
     @tool
-    def search_document(query: str) -> str:
-        """Search the user's documents for information, text, policies, data or any content.
-        Use this for general questions about the document content."""
-        logger.info("tool used: search_document")
+    def search_uploaded_files(query: str) -> str:
+        """Search across all the user's uploaded files and return the most relevant passages with their source file name.
+
+        Use this first to find where information appears, gather evidence from excerpts, or compare across files.
+        Do not use this when the user needs the full content of one specific file; use read_full_file instead.
+
+        Args:
+            query: The search terms or question to look for across the files.
+        """
+        logger.info("tool used: search_uploaded_files")
         results = retriever.retrieve(query=query, user=user, top_k=5)
         if not results:
-            return "No relevant information found in the document"
+            return "No relevant information found in the uploaded files."
 
-        return "\n\n".join(chunk.text for chunk, _ in results)
+        return "\n\n".join(
+            f"[Source: {chunk.document.original_name}]\n{chunk.text}"
+            for chunk, _ in results
+        )
 
-    return search_document
+    return search_uploaded_files
 
 
-def build_code_analysis_tool(retriever, user):
+def build_read_file_tool(retriever, user):
     @tool
-    def analyze_code(query: str, document_name: str) -> str:
-        """Use this tool for ANY request involving code: improving, fixing bugs, optimizing,
-        refactoring, explaining, documenting, reviewing code quality, or auditing security.
-        'document_name' is the name of the file to analyze (one of the user's uploaded files).
-        Review the full code, always check for hardcoded secrets/credentials, and report only
-        issues actually present in the code. Do not invent problems not visible in the file."""
+    def read_full_file(query: str, document_name: str) -> str:
+        """Read one uploaded file in full and use it to answer the user's request.
+
+        Use this for deep explanations, full-file summaries, reviewing or analyzing code, config, markdown or documentation, and proposing improvements. This is the right tool when the whole file context matters.
+
+        Args:
+            query: The user's goal or question about the file.
+            document_name: The name of the file to read (one of the user's uploaded files).
+        """
         logger.info("tool used: analyze_code")
         document = Document.objects.filter(
             owner=user, status="processed", original_name__icontains=document_name,
@@ -128,13 +140,39 @@ def build_code_analysis_tool(retriever, user):
             f"{truncated}{nota}"
         )
 
-    return analyze_code
+    return read_full_file
+
+
+def build_list_files_tool(user):
+    @tool
+    def list_repository_files(query: str = "") -> str:
+        """List the names of all the user's uploaded and processed files.
+
+        Use this to discover which files are available before deciding which one to read, or when the user asks what files or repository contents exist.
+
+        Args:
+            query: Optional filter text to narrow the listing (substring match on file name).
+        """
+        logger.info("tool used: list_repository_files")
+        qs = Document.objects.filter(owner=user, status="processed")
+        if query:
+            qs = qs.filter(original_name__icontains=query)
+        nombres = list(qs.values_list("original_name", flat=True))
+        if not nombres:
+            return "No processed files available."
+        return "Available files:\n" + "\n".join(f"- {n}" for n in nombres)
+
+    return list_repository_files
 
 
 def build_tavily_tool():
     @tool("tavily_search")
     def tavily_search(query: str) -> str:
-        """Search the web for recent external information when the active document is insufficient."""
+        """Search the web for recent external information only when the uploaded files do not contain the answer or the user explicitly asks for external sources.
+
+        Args:
+            query: The web search query.
+        """
         logger.info("tool used: tavily_search")
         result = _get_tavily_tool().invoke({"query": query})
         return str(result)
@@ -156,8 +194,9 @@ def build_agent(user):
     )
 
     tools = [
-        build_rag_tool(retriever, user),
-        build_code_analysis_tool(retriever, user),
+        build_search_tool(retriever, user),
+        build_read_file_tool(retriever, user),
+        build_list_files_tool(user),
         build_tavily_tool(),
     ]
     tools = tools + _get_mcp_tools()

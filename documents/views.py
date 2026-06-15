@@ -77,9 +77,10 @@ def _build_agent_messages(*, user, question: str, history: list | None = None) -
     else:
         system_content = (
             f"El usuario tiene estos documentos: {', '.join(nombres)}. "
-            "Para preguntas sobre el contenido usa search_document. "
-            "Para analizar un archivo de codigo concreto usa analyze_code con document_name. "
-            "Usa tavily_search solo para informacion externa."
+            "Use list_repository_files to see what files exist. "
+            "Use search_uploaded_files to find relevant passages across files. "
+            "Use read_full_file for the full content of a specific file (deep analysis, summaries, code review). "
+            "Use tavily_search only for external information."
         )
 
     messages: list[dict] = [{"role": "system", "content": system_content}]
