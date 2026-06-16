@@ -2,6 +2,7 @@ import json
 import logging
 import re
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -15,7 +16,6 @@ from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
 from documents.services.llm.openai_llm_provider import OpenAILLMProvider
-from documents.services.router.intent_router import classify_intent
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
 from documents.services.retrieval.retriever import Retriever
@@ -44,6 +44,29 @@ def _build_ask_service() -> AskService:
 
 def _build_agent_service(user, project=None):
     return build_agent(user, project=project)
+
+
+def _casual_reply(message: str) -> str:
+    """Respuesta breve y directa para charla casual, sin invocar al agente."""
+    if not settings.OPENAI_API_KEY:
+        return "De nada."
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        response = client.responses.create(
+            model="gpt-4o-mini",
+            temperature=0.5,
+            instructions=(
+                "Eres TariTech, un asistente sobre codigo y documentos. "
+                "Responde de forma breve, amable y natural a este mensaje casual. "
+                "No menciones documentos ni herramientas a menos que el usuario pregunte."
+            ),
+            input=(message or "").strip(),
+        )
+        return (response.output_text or "De nada.").strip()
+    except Exception:
+        logger.exception("Casual reply fallback")
+        return "De nada."
 
 
 FOLLOW_UP_PREFIXES = (
@@ -384,29 +407,35 @@ def ask_page(request):
         if not question:
             return redirect("documents:ask_ui")
 
-        try:
-            history = list(
-                conversation.messages
-                .order_by("-created_at")
-                .values("role", "content")[:6]
-            )
-            history.reverse()
-            agent = _build_agent_service(request.user, project=conversation.project)
-            result = agent.invoke(
-                {"messages": _build_agent_messages(
-                    user=request.user,
-                    question=question,
-                    history=history,
-                    project=conversation.project,
-                )}
-            )
-            tool_names = _extract_called_tools(result)
-            logger.info("tools called: %s", tool_names)
-            answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
-        except Exception:
-            logger.exception("Agent error")
-            answer = "Lo siento, ocurrio un error al procesar tu pregunta."
+        from documents.services.router.intent_router import classify_message
+        route = classify_message(question)
+        if route == "chat":
+            answer = _casual_reply(question)
             tool_names = []
+        else:
+            try:
+                history = list(
+                    conversation.messages
+                    .order_by("-created_at")
+                    .values("role", "content")[:6]
+                )
+                history.reverse()
+                agent = _build_agent_service(request.user, project=conversation.project)
+                result = agent.invoke(
+                    {"messages": _build_agent_messages(
+                        user=request.user,
+                        question=question,
+                        history=history,
+                        project=conversation.project,
+                    )}
+                )
+                tool_names = _extract_called_tools(result)
+                logger.info("tools called: %s", tool_names)
+                answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
+            except Exception:
+                logger.exception("Agent error")
+                answer = "Lo siento, ocurrio un error al procesar tu pregunta."
+                tool_names = []
 
         Message.objects.create(
             conversation=conversation,
