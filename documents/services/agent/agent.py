@@ -43,7 +43,7 @@ def _get_query_rewriter():
 @lru_cache(maxsize=1)
 def _get_llm():
     return ChatOpenAI(
-        model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+        model=getattr(settings, "OPENAI_AGENT_MODEL", "gpt-4.1"),
         temperature=0,
     )
 

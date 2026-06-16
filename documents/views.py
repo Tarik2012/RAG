@@ -72,23 +72,35 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
     if project is not None:
         docs_qs = docs_qs.filter(project=project)
     nombres = list(docs_qs.values_list("original_name", flat=True))
+    base_role = (
+        "You are TariTech, an assistant that helps users understand codebases and documents. "
+        "You answer questions about the user's uploaded files and connected repositories by "
+        "reasoning step by step: decide what information you need, use a tool to get it, observe "
+        "the result, and repeat until you can answer.\n\n"
+        "TOOLS:\n"
+        "- list_repository_files: list available files. Use it first when you are unsure which files exist.\n"
+        "- search_uploaded_files: find relevant passages across files (returns source file names).\n"
+        "- read_full_file: read one whole file for deep analysis, summaries, code review, or improvement proposals.\n"
+        "- tavily_search: only for external/web information not in the user's files.\n\n"
+        "RULES:\n"
+        "1. If the conversation history already contains the answer, use it. Do NOT call a tool again for something you already know from the recent messages.\n"
+        "2. Always mention which file an answer comes from when relevant.\n"
+        "3. Do not invent files, functions, or facts. If something is not in the files, say so.\n"
+        "4. For casual remarks or greetings (e.g. 'thanks', 'nice', 'ok'), reply briefly and naturally WITHOUT calling any tool.\n"
+        "5. Prefer search_uploaded_files for broad questions and read_full_file when the whole file matters."
+    )
+
     if not nombres:
-        system_content = "El usuario no tiene documentos procesados."
+        system_content = base_role + "\n\nThe user currently has no processed files."
     else:
-        system_content = (
-            f"El usuario tiene estos documentos: {', '.join(nombres)}. "
-            "Use list_repository_files to see what files exist. "
-            "Use search_uploaded_files to find relevant passages across files. "
-            "Use read_full_file for the full content of a specific file (deep analysis, summaries, code review). "
-            "Use tavily_search only for external information."
-        )
+        scope = "in the current project" if project is not None else ""
+        system_content = base_role + f"\n\nAvailable files {scope}: {', '.join(nombres)}."
 
     messages: list[dict] = [{"role": "system", "content": system_content}]
 
-    if _looks_like_follow_up(question):
-        recent_history = (history or [])[-6:]
-        for turn in recent_history:
-            messages.append({"role": turn["role"], "content": turn["content"]})
+    recent_history = (history or [])[-6:]
+    for turn in recent_history:
+        messages.append({"role": turn["role"], "content": turn["content"]})
 
     messages.append({"role": "user", "content": question})
     return messages
