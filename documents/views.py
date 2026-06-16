@@ -350,7 +350,8 @@ def ask_page(request):
         action = request.POST.get("action", "ask")
 
         if action == "clear":
-            conversation = Conversation.objects.create(user=request.user)
+            current_project = conversation.project if conversation else None
+            conversation = Conversation.objects.create(user=request.user, project=current_project)
             request.session["conversation_id"] = conversation.id
             return redirect("documents:ask_ui")
 
