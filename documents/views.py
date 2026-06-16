@@ -196,6 +196,19 @@ def conversation_open(request, conversation_id):
 
 
 @login_required
+@require_POST
+def conversation_delete(request, conversation_id):
+    conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
+    project_id = conversation.project_id
+    conversation.delete()
+    if request.session.get("conversation_id") == conversation_id:
+        request.session.pop("conversation_id", None)
+    if project_id:
+        return redirect("documents:project_detail", project_id=project_id)
+    return redirect("documents:ask_ui")
+
+
+@login_required
 def document_status(request):
     docs = Document.objects.filter(owner=request.user).values("id", "status", "documentation_status")
     return JsonResponse({"documents": list(docs)})
@@ -400,6 +413,9 @@ def ask_page(request):
             role=Message.ROLE_USER,
             content=question,
         )
+        if not conversation.title:
+            conversation.title = question[:60]
+            conversation.save(update_fields=["title"])
         Message.objects.create(
             conversation=conversation,
             role=Message.ROLE_ASSISTANT,

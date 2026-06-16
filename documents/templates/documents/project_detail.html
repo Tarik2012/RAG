@@ -112,13 +112,27 @@
       <div class="space-y-3">
         {% for conversation in conversations %}
           <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <a
-              href="{% url 'documents:conversation_open' conversation.id %}"
-              class="font-medium text-blue-600 hover:text-blue-800 transition"
-            >
-              {{ conversation.title|default:"Untitled conversation" }}
-            </a>
-            <div class="text-sm text-gray-500">Updated {{ conversation.updated_at|date:"Y-m-d H:i" }}</div>
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <a
+                  href="{% url 'documents:conversation_open' conversation.id %}"
+                  class="font-medium text-blue-600 hover:text-blue-800 transition"
+                >
+                  {{ conversation.title|default:"Sin titulo" }}
+                </a>
+                <div class="text-sm text-gray-500">Updated {{ conversation.updated_at|date:"Y-m-d H:i" }}</div>
+              </div>
+              <form method="post" action="{% url 'documents:conversation_delete' conversation.id %}">
+                {% csrf_token %}
+                <button
+                  type="submit"
+                  onclick="return confirm('Borrar esta conversacion?')"
+                  class="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                >
+                  Borrar
+                </button>
+              </form>
+            </div>
           </div>
         {% empty %}
           <p class="text-sm text-gray-500">No conversations in this project.</p>

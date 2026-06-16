@@ -45,7 +45,7 @@ class Document(models.Model):
     )
     project = models.ForeignKey(
         "Project",
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="documents",
@@ -164,7 +164,7 @@ class Conversation(models.Model):
     )
     project = models.ForeignKey(
         "Project",
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="conversations",
