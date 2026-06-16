@@ -1,105 +1,87 @@
 {% extends "core/base.html" %}
-
 {% block title %}Ask AI | TariTech{% endblock %}
+{% block container_class %}w-full{% endblock %}
 
 {% block content %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
-<div class="max-w-4xl mx-auto space-y-8">
 
-  <!-- Header -->
-  <div>
-    <div>
-      <h1 class="text-3xl font-semibold text-gray-900">
-        Ask your knowledge base
-      </h1>
-      <p class="mt-2 text-sm text-gray-500 max-w-2xl">
-        Ask questions and get precise answers based exclusively on your uploaded documents.
-      </p>
-    </div>
-  </div>
+<div class="flex flex-col h-[calc(100vh-4rem)] max-w-3xl mx-auto">
 
-  <!-- Ask card -->
-  <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
-    <form method="post" class="p-8 space-y-6">
-      {% csrf_token %}
-
-      <!-- Question -->
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-2">
-          Question
-        </label>
-
-        <textarea
-          name="question"
-          rows="4"
-          required
-          class="block w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm
-                 focus:border-accent focus:ring-2 focus:ring-accent/20 transition"
-          placeholder="e.g. What is the cancellation period stated in the contract?"
-        ></textarea>
-
-        <div class="mt-2 text-xs text-gray-400">
-          Answers are generated from your documents and the web when needed.
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-100">
-        <div class="flex items-center gap-2">
-          <button
-            type="submit"
-            name="action"
-            value="clear"
-            class="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700
-                   hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200 transition"
-          >
-            Nueva conversacion
-          </button>
-          <button
-            type="submit"
-            name="action"
-            value="ask"
-            class="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5
-                   text-sm font-medium text-white shadow-sm
-                   hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-accent/30 transition"
-          >
-            Ask AI
-          </button>
-        </div>
-      </div>
-    </form>
-  </div>
-
-  <!-- Chat history -->
-  <div class="space-y-4">
+  <!-- Mensajes -->
+  <div id="chat-scroll" class="flex-1 overflow-y-auto py-6 space-y-4">
     {% if history %}
-      {% for message in history reversed %}
-        <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
-          <div class="p-6 space-y-4">
-            <div>
-              <div class="text-xs font-medium text-gray-400">
-                {% if message.role == "user" %}You{% else %}AI{% endif %}
-              </div>
-              {% if message.role == "assistant" %}
-                <div id="answer-{{ forloop.counter }}" class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-800 prose max-w-none"></div>
-                <script>
-                  document.getElementById('answer-{{ forloop.counter }}').innerHTML = marked.parse(`{{ message.content|escapejs }}`);
-                </script>
-              {% else %}
-                <div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-800 whitespace-pre-wrap">{{ message.content }}</div>
-              {% endif %}
-            </div>
+      {% for message in history %}
+        {% if message.role == "user" %}
+          <div class="flex justify-end">
+            <div class="max-w-[75%] rounded-2xl rounded-br-sm bg-accent text-white px-4 py-2.5 text-sm whitespace-pre-wrap">{{ message.content }}</div>
           </div>
-        </div>
+        {% else %}
+          <div class="flex justify-start">
+            <div class="max-w-[80%] rounded-2xl rounded-bl-sm bg-white border border-gray-200 px-4 py-3 text-sm text-gray-800 prose max-w-none" id="answer-{{ forloop.counter }}"></div>
+            <script>document.getElementById('answer-{{ forloop.counter }}').innerHTML = marked.parse(`{{ message.content|escapejs }}`);</script>
+          </div>
+        {% endif %}
       {% endfor %}
     {% else %}
-      <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
-        <div class="p-6 text-sm text-gray-500">
-          No questions yet. Ask your first question above.
-        </div>
-      </div>
+      <div class="text-center text-sm text-gray-400 mt-12">No hay mensajes todavia. Haz tu primera pregunta abajo.</div>
     {% endif %}
   </div>
 
+  <!-- Input fijo abajo -->
+  <div class="border-t border-gray-200 bg-gray-50 py-4">
+    <form method="post" id="ask-form" class="flex items-end gap-2">
+      {% csrf_token %}
+      <textarea
+        name="question"
+        id="question-input"
+        rows="1"
+        required
+        class="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-accent focus:ring-2 focus:ring-accent/20 transition"
+        placeholder="Pregunta sobre tus documentos..."
+      ></textarea>
+      <button type="submit" name="action" value="ask" class="rounded-xl bg-accent px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-blue-500 transition">Enviar</button>
+      <button type="submit" name="action" value="clear" class="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100 transition">Nueva</button>
+    </form>
+  </div>
 </div>
+
+<script>
+  const scroll = document.getElementById('chat-scroll');
+  if (scroll) scroll.scrollTop = scroll.scrollHeight;
+
+  const input = document.getElementById('question-input');
+  const form = document.getElementById('ask-form');
+  let submitting = false;
+
+  function submitAsk() {
+    if (submitting) return;
+    if (!input.value.trim()) return;
+    submitting = true;
+    const action = document.createElement('input');
+    action.type = 'hidden';
+    action.name = 'action';
+    action.value = 'ask';
+    form.appendChild(action);
+    form.querySelectorAll('button').forEach(el => el.disabled = true);
+    input.readOnly = true;
+    const btn = form.querySelector('button[value="ask"]');
+    if (btn) btn.textContent = 'Pensando...';
+    form.submit();
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitAsk();
+    }
+  });
+
+  const askBtn = form.querySelector('button[value="ask"]');
+  if (askBtn) {
+    askBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      submitAsk();
+    });
+  }
+</script>
 {% endblock %}

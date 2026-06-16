@@ -1,134 +1,65 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-
     <title>{% block title %}TariTech | Intelligent Knowledge Systems{% endblock %}</title>
-
-    <!-- Tailwind CDN (no build, no install) -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Tailwind basic config -->
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: "#0f172a",
-              accent: "#2563eb",
-            },
-          },
-        },
-      };
+      tailwind.config = { theme: { extend: { colors: { primary: "#0f172a", accent: "#2563eb" } } } };
     </script>
   </head>
+  <body class="h-screen flex bg-gray-50 text-gray-800 overflow-hidden">
 
-  <body class="min-h-screen flex flex-col bg-gray-50 text-gray-800">
+    {% if request.user.is_authenticated %}
+    <!-- Sidebar -->
+    <aside class="w-64 bg-primary text-white flex flex-col flex-shrink-0">
+      <!-- Brand -->
+      <div class="px-4 py-4 flex items-center gap-3 border-b border-slate-700">
+        <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center font-bold">T</div>
+        <span class="font-semibold">TariTech</span>
+      </div>
 
-    <!-- Header -->
-    <header class="bg-primary text-white">
-      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <!-- Nav principal -->
+      <nav class="px-3 py-3 space-y-1 text-sm border-b border-slate-700">
+        <a href="{% url 'core:home' %}" class="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">Home</a>
+        <a href="{% url 'documents:list' %}" class="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition">Documents</a>
+      </nav>
 
-        <!-- Brand -->
-        <div class="flex items-center space-x-3">
-          <div class="w-9 h-9 rounded-lg bg-accent flex items-center justify-center font-bold text-lg">
-            T
-          </div>
-          <div class="leading-tight">
-            <span class="text-lg font-semibold tracking-tight">
-              TariTech
-            </span>
-            <div class="text-xs text-slate-400">
-              Intelligent Knowledge Systems
-            </div>
-          </div>
+      <!-- Proyectos -->
+      <div class="flex-1 overflow-y-auto px-3 py-3">
+        <div class="flex items-center justify-between px-3 mb-2">
+          <span class="text-xs uppercase tracking-wide text-slate-400">Proyectos</span>
+          <a href="{% url 'documents:project_list' %}" class="text-slate-400 hover:text-white text-lg leading-none">+</a>
         </div>
-
-        <!-- Navigation -->
-        <nav class="hidden md:flex items-center space-x-6 text-sm">
-          <a
-            href="{% url 'core:home' %}"
-            class="text-slate-300 hover:text-white transition"
-          >
-            Home
-          </a>
-
-          <a
-            href="{% url 'documents:list' %}"
-            class="text-slate-300 hover:text-white transition"
-          >
-            Documents
-          </a>
-
-          <a
-            href="{% url 'documents:ask_ui' %}"
-            class="text-slate-300 hover:text-white transition"
-          >
-            Ask AI
-          </a>
-
-          {% if request.user.is_authenticated %}
-            <a
-              href="{% url 'documents:project_list' %}"
-              class="text-slate-300 hover:text-white transition"
-            >
-              Proyectos
-            </a>
-          {% endif %}
-        </nav>
-
-        <!-- Auth -->
-        <div class="flex items-center space-x-4 text-sm">
-          <span class="hidden sm:inline text-slate-400">
-            Internal platform
-          </span>
-
-          {% if request.user.is_authenticated %}
-            <span class="text-slate-300">
-              {{ request.user.username }}
-            </span>
-
-            <a
-              href="{% url 'logout' %}?next=/"
-              class="text-slate-300 hover:text-white transition"
-            >
-              Cerrar sesión
-            </a>
-          {% else %}
-            <a
-              href="{% url 'core:signup' %}"
-              class="text-slate-300 hover:text-white transition"
-            >
-              Registrarse
-            </a>
-
-            <a
-              href="{% url 'login' %}?next=/"
-              class="text-slate-300 hover:text-white transition"
-            >
-              Iniciar sesion
-            </a>
-          {% endif %}
+        <div class="space-y-1 text-sm">
+          {% for project in sidebar_projects %}
+            <a href="{% url 'documents:project_detail' project.id %}" class="block px-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition truncate">{{ project.name }}</a>
+          {% empty %}
+            <a href="{% url 'documents:project_list' %}" class="block px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition text-xs">Crea tu primer proyecto</a>
+          {% endfor %}
         </div>
-
       </div>
-    </header>
 
-    <!-- Main -->
-    <main class="flex-1">
-      <div class="max-w-7xl mx-auto px-6 py-8">
-        {% block content %}{% endblock %}
+      <!-- Auth abajo -->
+      <div class="px-3 py-3 border-t border-slate-700 text-sm">
+        <div class="flex items-center justify-between px-2">
+          <span class="text-slate-300 truncate">{{ request.user.username }}</span>
+          <a href="{% url 'logout' %}?next=/" class="text-slate-400 hover:text-white transition">Salir</a>
+        </div>
       </div>
-    </main>
+    </aside>
+    {% endif %}
 
-    <!-- Footer -->
-    <footer class="bg-gray-100 border-t">
-      <div class="max-w-7xl mx-auto px-6 py-4 text-sm text-gray-500 flex flex-col sm:flex-row justify-between gap-2">
-        <span>&copy; 2026 TariTech</span>
-        <span>Private knowledge platform for professionals</span>
-      </div>
-    </footer>
+    <!-- Contenido -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <main class="flex-1 overflow-y-auto">
+        <div class="{% block container_class %}max-w-5xl mx-auto{% endblock %} px-6 py-8">
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+    </div>
 
     {% block extra_js %}{% endblock %}
   </body>
