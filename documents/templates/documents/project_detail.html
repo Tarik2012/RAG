@@ -1,0 +1,130 @@
+{% extends "core/base.html" %}
+
+{% block title %}Project Detail | TariTech{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-semibold text-gray-800">{{ project.name }}</h2>
+      <p class="text-sm text-gray-500">{{ project.description|default:"No description." }}</p>
+    </div>
+    <a
+      href="{% url 'documents:project_list' %}"
+      class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+    >
+      Back to projects
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
+    <div class="p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Documents</h3>
+      <form
+        method="post"
+        action="{% url 'documents:upload' %}"
+        enctype="multipart/form-data"
+        class="mb-6 space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="project_id" value="{{ project.id }}">
+        <div>
+          <label
+            for="{{ form.original_name.id_for_label }}"
+            class="block text-sm font-medium text-gray-700"
+          >
+            Document name
+          </label>
+          <div class="mt-1">
+            {{ form.original_name }}
+          </div>
+        </div>
+        <div>
+          <label
+            for="{{ form.file.id_for_label }}"
+            class="block text-sm font-medium text-gray-700"
+          >
+            File
+          </label>
+          <div class="mt-1">
+            {{ form.file }}
+          </div>
+        </div>
+        <button
+          type="submit"
+          class="inline-flex items-center rounded-md bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 transition shadow-sm"
+        >
+          Upload document
+        </button>
+      </form>
+
+      <form method="post" action="{% url 'documents:repo_ingest' %}" class="mb-6 flex flex-col gap-3 rounded-md bg-white p-4 shadow sm:flex-row sm:items-center">
+        {% csrf_token %}
+        <input type="hidden" name="project_id" value="{{ project.id }}">
+        <input
+          type="text"
+          name="repo_full"
+          placeholder="owner/repo (ej: Tarik2012/RAG)"
+          required
+          class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        >
+        <input
+          type="text"
+          name="branch"
+          placeholder="rama (opcional, ej: feature/mcp-client)"
+          class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        >
+        <button
+          type="submit"
+          class="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+        >
+          Ingerir repo de GitHub
+        </button>
+      </form>
+
+      <div class="space-y-3">
+        {% for document in documents %}
+          <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <div class="font-medium text-gray-800">{{ document.original_name }}</div>
+            <div class="text-sm text-gray-500">{{ document.content_type }} · {{ document.created_at|date:"Y-m-d H:i" }}</div>
+          </div>
+        {% empty %}
+          <p class="text-sm text-gray-500">No documents in this project.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
+    <div class="p-6">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <h3 class="text-lg font-semibold text-gray-800">Conversations</h3>
+        <form method="post" action="{% url 'documents:conversation_create' project.id %}">
+          {% csrf_token %}
+          <button
+            type="submit"
+            class="inline-flex items-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition shadow-sm"
+          >
+            Nueva conversacion
+          </button>
+        </form>
+      </div>
+      <div class="space-y-3">
+        {% for conversation in conversations %}
+          <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <a
+              href="{% url 'documents:conversation_open' conversation.id %}"
+              class="font-medium text-blue-600 hover:text-blue-800 transition"
+            >
+              {{ conversation.title|default:"Untitled conversation" }}
+            </a>
+            <div class="text-sm text-gray-500">Updated {{ conversation.updated_at|date:"Y-m-d H:i" }}</div>
+          </div>
+        {% empty %}
+          <p class="text-sm text-gray-500">No conversations in this project.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

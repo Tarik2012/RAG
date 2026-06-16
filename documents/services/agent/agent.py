@@ -78,7 +78,7 @@ def _get_mcp_tools():
         return []
 
 
-def build_search_tool(retriever, user):
+def build_search_tool(retriever, user, project=None):
     @tool
     def search_uploaded_files(query: str) -> str:
         """Search across all the user's uploaded files and return the most relevant passages with their source file name.
@@ -90,7 +90,13 @@ def build_search_tool(retriever, user):
             query: The search terms or question to look for across the files.
         """
         logger.info("tool used: search_uploaded_files")
-        results = retriever.retrieve(query=query, user=user, top_k=5)
+        document_ids = None
+        if project is not None:
+            document_ids = list(
+                Document.objects.filter(owner=user, status="processed", project=project)
+                .values_list("id", flat=True)
+            )
+        results = retriever.retrieve(query=query, user=user, top_k=5, document_ids=document_ids)
         if not results:
             return "No relevant information found in the uploaded files."
 
@@ -102,7 +108,7 @@ def build_search_tool(retriever, user):
     return search_uploaded_files
 
 
-def build_read_file_tool(retriever, user):
+def build_read_file_tool(retriever, user, project=None):
     @tool
     def read_full_file(query: str, document_name: str) -> str:
         """Read one uploaded file in full and use it to answer the user's request.
@@ -114,14 +120,17 @@ def build_read_file_tool(retriever, user):
             document_name: The name of the file to read (one of the user's uploaded files).
         """
         logger.info("tool used: analyze_code")
-        document = Document.objects.filter(
+        documents_qs = Document.objects.filter(
             owner=user, status="processed", original_name__icontains=document_name,
-        ).first()
+        )
+        if project is not None:
+            documents_qs = documents_qs.filter(project=project)
+        document = documents_qs.first()
         if document is None:
-            available = list(
-                Document.objects.filter(owner=user, status="processed")
-                .values_list("original_name", flat=True)
-            )
+            available_qs = Document.objects.filter(owner=user, status="processed")
+            if project is not None:
+                available_qs = available_qs.filter(project=project)
+            available = list(available_qs.values_list("original_name", flat=True))
             return f"No file matching '{document_name}'. Available files: {', '.join(available) or 'none'}."
         full_text = get_document_full_text(document)
         if not full_text.strip():
@@ -143,7 +152,7 @@ def build_read_file_tool(retriever, user):
     return read_full_file
 
 
-def build_list_files_tool(user):
+def build_list_files_tool(user, project=None):
     @tool
     def list_repository_files(query: str = "") -> str:
         """List the names of all the user's uploaded and processed files.
@@ -155,6 +164,8 @@ def build_list_files_tool(user):
         """
         logger.info("tool used: list_repository_files")
         qs = Document.objects.filter(owner=user, status="processed")
+        if project is not None:
+            qs = qs.filter(project=project)
         if query:
             qs = qs.filter(original_name__icontains=query)
         nombres = list(qs.values_list("original_name", flat=True))
@@ -186,7 +197,7 @@ class AgentState(TypedDict, total=False):
     retries: int
 
 
-def build_agent(user):
+def build_agent(user, project=None):
     retriever = Retriever(
         embedding_provider=_get_embedding_provider(),
         query_rewriter=_get_query_rewriter(),
@@ -194,9 +205,9 @@ def build_agent(user):
     )
 
     tools = [
-        build_search_tool(retriever, user),
-        build_read_file_tool(retriever, user),
-        build_list_files_tool(user),
+        build_search_tool(retriever, user, project=project),
+        build_read_file_tool(retriever, user, project=project),
+        build_list_files_tool(user, project=project),
         build_tavily_tool(),
     ]
     tools = tools + _get_mcp_tools()

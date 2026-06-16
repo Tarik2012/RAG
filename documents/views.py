@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from django_ratelimit.decorators import ratelimit
 
 from .forms import DocumentUploadForm
-from documents.models import Conversation, Document, Message
+from documents.models import Conversation, Document, Message, Project
 from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
@@ -42,8 +42,8 @@ def _build_ask_service() -> AskService:
     )
 
 
-def _build_agent_service(user):
-    return build_agent(user)
+def _build_agent_service(user, project=None):
+    return build_agent(user, project=project)
 
 
 FOLLOW_UP_PREFIXES = (
@@ -67,11 +67,11 @@ def _looks_like_follow_up(question: str) -> bool:
     return any(ref in normalized for ref in FOLLOW_UP_REFERENCES)
 
 
-def _build_agent_messages(*, user, question: str, history: list | None = None) -> list[dict]:
-    nombres = list(
-        Document.objects.filter(owner=user, status="processed")
-        .values_list("original_name", flat=True)
-    )
+def _build_agent_messages(*, user, question: str, history: list | None = None, project=None) -> list[dict]:
+    docs_qs = Document.objects.filter(owner=user, status="processed")
+    if project is not None:
+        docs_qs = docs_qs.filter(project=project)
+    nombres = list(docs_qs.values_list("original_name", flat=True))
     if not nombres:
         system_content = "El usuario no tiene documentos procesados."
     else:
@@ -132,6 +132,58 @@ def document_list(request):
 
 
 @login_required
+def project_list(request):
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        if name:
+            Project.objects.create(
+                user=request.user,
+                name=name,
+                description=request.POST.get("description", "").strip(),
+            )
+        return redirect("documents:project_list")
+    projects = Project.objects.filter(user=request.user)
+    return render(request, "documents/project_list.html", {"projects": projects})
+
+
+@login_required
+def project_detail(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    documents = project.documents.all()
+    conversations = project.conversations.order_by("-updated_at")
+    return render(request, "documents/project_detail.html", {
+        "project": project,
+        "documents": documents,
+        "conversations": conversations,
+        "form": DocumentUploadForm(),
+    })
+
+
+@login_required
+def project_delete(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    if request.method == "POST":
+        project.delete()
+    return redirect("documents:project_list")
+
+
+@login_required
+@require_POST
+def conversation_create(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    conversation = Conversation.objects.create(user=request.user, project=project)
+    request.session["conversation_id"] = conversation.id
+    return redirect("documents:ask_ui")
+
+
+@login_required
+def conversation_open(request, conversation_id):
+    conversation = get_object_or_404(Conversation, id=conversation_id, user=request.user)
+    request.session["conversation_id"] = conversation.id
+    return redirect("documents:ask_ui")
+
+
+@login_required
 def document_status(request):
     docs = Document.objects.filter(owner=request.user).values("id", "status", "documentation_status")
     return JsonResponse({"documents": list(docs)})
@@ -139,20 +191,22 @@ def document_status(request):
 
 @login_required
 def document_upload(request):
+    project_id = request.POST.get("project_id") or request.GET.get("project_id")
     if request.method == "POST":
         form = DocumentUploadForm(request.POST, request.FILES)
-
         if form.is_valid():
             doc = form.save(commit=False)
             uploaded_file = request.FILES["file"]
-
             doc.owner = request.user
             doc.content_type = uploaded_file.content_type or ""
             doc.size = uploaded_file.size
-
+            if project_id:
+                from documents.models import Project
+                doc.project = Project.objects.filter(id=project_id, user=request.user).first()
             doc.save()
             process_document_task.delay(doc.id)
-
+            if doc.project_id:
+                return redirect("documents:project_detail", project_id=doc.project_id)
             return redirect("documents:list")
     else:
         form = DocumentUploadForm()
@@ -160,7 +214,7 @@ def document_upload(request):
     return render(
         request,
         "documents/document_upload.html",
-        {"form": form},
+        {"form": form, "project_id": project_id},
     )
 
 
@@ -177,8 +231,11 @@ def repo_ingest(request):
     owner = parts[0]
     repo = parts[1].removesuffix(".git")
     branch = (request.POST.get("branch") or "").strip() or None
+    project_id = request.POST.get("project_id")
     ingest_repo_task.delay(owner, repo, request.user.id, branch)
     messages.success(request, f"Ingesta de {owner}/{repo} iniciada. Los archivos iran apareciendo en la lista.")
+    if project_id:
+        return redirect("documents:project_detail", project_id=project_id)
     return redirect("documents:list")
 
 
@@ -308,12 +365,13 @@ def ask_page(request):
                 .values("role", "content")[:6]
             )
             history.reverse()
-            agent = _build_agent_service(request.user)
+            agent = _build_agent_service(request.user, project=conversation.project)
             result = agent.invoke(
                 {"messages": _build_agent_messages(
                     user=request.user,
                     question=question,
                     history=history,
+                    project=conversation.project,
                 )}
             )
             tool_names = _extract_called_tools(result)
