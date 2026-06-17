@@ -10,6 +10,7 @@ from .views import (
     document_status,
     document_upload,
     repo_ingest,
+    repo_delete,
     document_delete,
     documentation_view,
     generate_documentation_trigger,
@@ -31,6 +32,7 @@ urlpatterns = [
     path("status/", document_status, name="status"),
     path("upload/", document_upload, name="upload"),
     path("repos/ingest/", repo_ingest, name="repo_ingest"),
+    path("projects/<int:project_id>/repos/delete/", repo_delete, name="repo_delete"),
     path("delete/<int:pk>/", document_delete, name="delete"),
 
     # API (RAG)

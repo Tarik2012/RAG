@@ -324,11 +324,30 @@ def document_delete(request, pk):
         pk=pk,
         owner=request.user,
     )
-
+    project_id = document.project_id
     document.file.delete(save=False)
     document.delete()
-
+    if project_id:
+        return redirect("documents:project_detail", project_id=project_id)
     return redirect("documents:list")
+
+
+@login_required
+@require_POST
+def repo_delete(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    repo_name = (request.POST.get("repo_name") or "").strip()
+    if not repo_name:
+        return redirect("documents:project_detail", project_id=project_id)
+    docs = Document.objects.filter(
+        owner=request.user,
+        project=project,
+        source=f"github:{repo_name}",
+    )
+    for doc in docs:
+        doc.file.delete(save=False)
+    docs.delete()
+    return redirect("documents:project_detail", project_id=project_id)
 
 
 @login_required

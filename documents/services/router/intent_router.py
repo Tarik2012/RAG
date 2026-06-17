@@ -16,11 +16,14 @@ def classify_message(message: str) -> str:
             model="gpt-4o-mini",
             temperature=0,
             instructions=(
-                "You are a message classifier for a document/code assistant. "
-                "Return ONLY one word: chat or agent. "
-                "Return 'chat' for greetings, thanks, acknowledgements, small talk, "
-                "or messages that do not ask anything about documents or code (e.g. 'hola', 'gracias', 'muy bien', 'ok'). "
-                "Return 'agent' for any real question or request about the user's files, documents, code, or that needs searching or analysis."
+                "You classify a user message for a code/document assistant. "
+                "Reply with ONLY one word: chat or agent.\n"
+                "Reply 'chat' ONLY if the message is a pure greeting, thanks, or acknowledgement "
+                "with no task and no topic, like: 'hola', 'gracias', 'ok', 'perfecto', 'buenas', 'adios'.\n"
+                "Reply 'agent' for EVERYTHING else: any question, any instruction or task "
+                "(e.g. 'analiza views.py', 'vamos a trabajar con el repo X', 'que hace este archivo', "
+                "'resume el codigo'), or anything mentioning files, code, repos, or documents. "
+                "When in doubt, reply 'agent'."
             ),
             input=(message or "").strip(),
         )

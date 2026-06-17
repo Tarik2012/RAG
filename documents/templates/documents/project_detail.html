@@ -85,24 +85,74 @@
       <div class="space-y-3">
         {% for repo in repo_groups %}
           <details class="mb-2 rounded-lg border border-gray-200 bg-white">
-            <summary class="flex cursor-pointer items-center gap-2 px-4 py-3 font-medium text-gray-800">
-              <span>Repositorio: {{ repo.name }}</span>
-              <span class="text-xs text-gray-500">({{ repo.count }} archivos)</span>
+            <summary class="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 font-medium text-gray-800">
+              <span class="flex items-center gap-2">
+                <span>Repositorio: {{ repo.name }}</span>
+                <span class="text-xs text-gray-500">({{ repo.count }} archivos)</span>
+              </span>
+              <form method="post" action="{% url 'documents:repo_delete' project.id %}"
+                    onsubmit="return confirm('Borrar el repositorio {{ repo.name }} y todos sus archivos?')">
+                {% csrf_token %}
+                <input type="hidden" name="repo_name" value="{{ repo.name }}">
+                <button type="submit"
+                  class="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                  Eliminar repositorio
+                </button>
+              </form>
             </summary>
             <div class="border-t border-gray-100 px-4 py-2">
               {% for doc in repo.files %}
-                <div class="flex items-center justify-between py-1.5 text-sm text-gray-700">
+                <div
+                  class="flex items-center justify-between py-1.5 text-sm text-gray-700"
+                  data-doc-id="{{ doc.pk }}"
+                  data-doc-status="{{ doc.status }}"
+                >
                   <span>{{ doc.original_name }}</span>
-                  <span class="text-xs text-gray-400">{{ doc.status }}</span>
+                  <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium {% if doc.status == 'processed' %}bg-green-100 text-green-700{% elif doc.status == 'processing' or doc.status == 'uploaded' %}bg-yellow-100 text-yellow-700{% elif doc.status == 'failed' %}bg-red-100 text-red-700{% else %}bg-gray-100 text-gray-700{% endif %}">
+                    {% if doc.status == 'processing' or doc.status == 'uploaded' %}
+                      <svg class="animate-spin h-3 w-3 inline-block mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                      </svg>
+                    {% endif %}
+                    {{ doc.status }}
+                  </span>
                 </div>
               {% endfor %}
             </div>
           </details>
         {% endfor %}
         {% for document in documents %}
-          <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <div class="font-medium text-gray-800">{{ document.original_name }}</div>
-            <div class="text-sm text-gray-500">{{ document.content_type }} · {{ document.created_at|date:"Y-m-d H:i" }}</div>
+          <div
+            class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+            data-doc-id="{{ document.pk }}"
+            data-doc-status="{{ document.status }}"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium text-gray-800">{{ document.original_name }}</div>
+                <div class="text-sm text-gray-500">{{ document.content_type }} - {{ document.created_at|date:"Y-m-d H:i" }}</div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium {% if document.status == 'processed' %}bg-green-100 text-green-700{% elif document.status == 'processing' or document.status == 'uploaded' %}bg-yellow-100 text-yellow-700{% elif document.status == 'failed' %}bg-red-100 text-red-700{% else %}bg-gray-100 text-gray-700{% endif %}">
+                  {% if document.status == 'processing' or document.status == 'uploaded' %}
+                    <svg class="animate-spin h-3 w-3 inline-block mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                    </svg>
+                  {% endif %}
+                  {{ document.status }}
+                </span>
+                <form method="post" action="{% url 'documents:delete' document.pk %}"
+                      onsubmit="return confirm('Borrar este documento?')">
+                  {% csrf_token %}
+                  <button type="submit"
+                    class="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                    Eliminar
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         {% empty %}
           {% if not repo_groups %}
@@ -159,4 +209,35 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const STATUS_URL = "{% url 'documents:status' %}";
+  const PENDING = ["uploaded", "processing"];
+
+  function hasPending() {
+    return Array.from(document.querySelectorAll("[data-doc-id]"))
+      .some(el => PENDING.includes(el.dataset.docStatus));
+  }
+
+  async function tick() {
+    if (!hasPending()) return;
+    try {
+      const res = await fetch(STATUS_URL);
+      if (!res.ok) return;
+      const data = await res.json();
+      const changed = data.documents.some(doc => {
+        const el = document.querySelector('[data-doc-id="' + doc.id + '"]');
+        return el && el.dataset.docStatus !== doc.status;
+      });
+      if (changed) { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 3000);
+  }
+
+  if (hasPending()) setTimeout(tick, 3000);
+})();
+</script>
 {% endblock %}
