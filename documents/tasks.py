@@ -61,7 +61,14 @@ def generate_documentation_task(self, document_id: int):
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=3)
-def ingest_repo_task(self, owner: str, repo: str, user_id: int, branch: str | None = None) -> int:
+def ingest_repo_task(
+    self,
+    owner: str,
+    repo: str,
+    user_id: int,
+    branch: str | None = None,
+    project_id=None,
+) -> int:
     user = get_user_model().objects.get(id=user_id)
     branch = branch or get_default_branch(owner, repo)
     source = f"github:{owner}/{repo}"
@@ -70,7 +77,14 @@ def ingest_repo_task(self, owner: str, repo: str, user_id: int, branch: str | No
     created = 0
     for path in paths:
         try:
-            ingest_repo_file(owner=owner, repo=repo, path=path, user=user, branch=branch)
+            ingest_repo_file(
+                owner=owner,
+                repo=repo,
+                path=path,
+                user=user,
+                branch=branch,
+                project_id=project_id,
+            )
             created += 1
         except Exception:
             logger.exception("Fallo al ingerir %s de %s/%s", path, owner, repo)

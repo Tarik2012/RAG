@@ -18,9 +18,9 @@ def test_repo_ingest_enqueues_task(client, user, settings):
         )
 
     assert response.status_code == 200
-    delay.assert_called_once_with("Tarik2012", "RAG", user.id, None)
+    delay.assert_called_once_with("Tarik2012", "RAG", user.id, None, None)
     messages = [message.message for message in get_messages(response.wsgi_request)]
-    assert "Ingesta de Tarik2012/RAG iniciada. Los archivos iran apareciendo en la lista." in messages
+    assert "Ingesta de Tarik2012/RAG iniciada. Los archivos apareceran en unos segundos; recarga la pagina." in messages
 
 
 @pytest.mark.django_db

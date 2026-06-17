@@ -159,10 +159,24 @@ def _append_tools_to_answer(answer: str, tool_names: list[str]) -> str:
 def document_list(request):
     documents = Document.objects.filter(owner=request.user).order_by("-created_at")
 
+    standalone = []
+    repos = {}
+    for doc in documents:
+        if doc.source and doc.source.startswith("github:"):
+            repo_name = doc.source.replace("github:", "")
+            repos.setdefault(repo_name, []).append(doc)
+        else:
+            standalone.append(doc)
+
+    repo_groups = [
+        {"name": name, "files": files, "count": len(files)}
+        for name, files in repos.items()
+    ]
+
     return render(
         request,
         "documents/document_list.html",
-        {"documents": documents},
+        {"documents": standalone, "repo_groups": repo_groups},
     )
 
 
@@ -184,11 +198,26 @@ def project_list(request):
 @login_required
 def project_detail(request, project_id):
     project = get_object_or_404(Project, id=project_id, user=request.user)
-    documents = project.documents.all()
+    all_docs = project.documents.all().order_by("-created_at")
     conversations = project.conversations.order_by("-updated_at")
+
+    standalone = []
+    repos = {}
+    for doc in all_docs:
+        if doc.source and doc.source.startswith("github:"):
+            repo_name = doc.source.replace("github:", "")
+            repos.setdefault(repo_name, []).append(doc)
+        else:
+            standalone.append(doc)
+    repo_groups = [
+        {"name": name, "files": files, "count": len(files)}
+        for name, files in repos.items()
+    ]
+
     return render(request, "documents/project_detail.html", {
         "project": project,
-        "documents": documents,
+        "documents": standalone,
+        "repo_groups": repo_groups,
         "conversations": conversations,
         "form": DocumentUploadForm(),
     })
@@ -280,8 +309,8 @@ def repo_ingest(request):
     repo = parts[1].removesuffix(".git")
     branch = (request.POST.get("branch") or "").strip() or None
     project_id = request.POST.get("project_id")
-    ingest_repo_task.delay(owner, repo, request.user.id, branch)
-    messages.success(request, f"Ingesta de {owner}/{repo} iniciada. Los archivos iran apareciendo en la lista.")
+    ingest_repo_task.delay(owner, repo, request.user.id, branch, project_id)
+    messages.success(request, f"Ingesta de {owner}/{repo} iniciada. Los archivos apareceran en unos segundos; recarga la pagina.")
     if project_id:
         return redirect("documents:project_detail", project_id=project_id)
     return redirect("documents:list")

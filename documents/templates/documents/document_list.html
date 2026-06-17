@@ -44,6 +44,23 @@
   </button>
 </form>
 
+{% for repo in repo_groups %}
+  <details class="mb-2 rounded-lg border border-gray-200 bg-white">
+    <summary class="flex cursor-pointer items-center gap-2 px-4 py-3 font-medium text-gray-800">
+      <span>Repositorio: {{ repo.name }}</span>
+      <span class="text-xs text-gray-500">({{ repo.count }} archivos)</span>
+    </summary>
+    <div class="border-t border-gray-100 px-4 py-2">
+      {% for doc in repo.files %}
+        <div class="flex items-center justify-between py-1.5 text-sm text-gray-700">
+          <span>{{ doc.original_name }}</span>
+          <span class="text-xs text-gray-400">{{ doc.status }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+{% endfor %}
+
 <div class="bg-white shadow rounded-md overflow-hidden">
   <table class="w-full text-sm">
     <thead class="bg-gray-100 text-gray-600">
@@ -117,7 +134,8 @@
             </form>
           </td>
         </tr>
-      {% empty %}
+      {% endfor %}
+      {% if not documents and not repo_groups %}
         <tr>
           <td colspan="6" class="px-6 py-12 text-center">
             <p class="text-gray-500 text-sm mb-3">
@@ -131,7 +149,7 @@
             </a>
           </td>
         </tr>
-      {% endfor %}
+      {% endif %}
     </tbody>
   </table>
 </div>
