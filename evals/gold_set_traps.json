@@ -1,0 +1,7 @@
+[
+  { "question": "\u00bfQue version exacta de Kubernetes usa el proyecto?" },
+  { "question": "\u00bfCuantos empleados tiene la empresa que desarrollo este sistema?" },
+  { "question": "\u00bfQue presupuesto anual tiene asignado el proyecto?" },
+  { "question": "\u00bfEn que fecha exacta se lanzo la primera version a produccion?" },
+  { "question": "\u00bfQue proveedor de email transaccional utiliza el sistema?" }
+]
