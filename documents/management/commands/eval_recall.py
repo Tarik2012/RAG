@@ -27,15 +27,29 @@ class Command(BaseCommand):
         retriever = _build_ask_service().retriever
 
         hits = 0
+        reciprocal_ranks = []
         for item in gold:
             question = item["question"]
             snippets = [s.lower() for s in item["expected_snippets"]]
             results = retriever.retrieve(query=question, user=user, top_k=top_k)
-            chunks_text = " ".join(chunk.text.lower() for chunk, _ in results)
-            found = any(s in chunks_text for s in snippets)
+
+            # Buscar la posicion (1-indexed) del primer chunk que contiene un snippet esperado
+            rank = 0
+            for idx, (chunk, _) in enumerate(results, start=1):
+                text = chunk.text.lower()
+                if any(s in text for s in snippets):
+                    rank = idx
+                    break
+
+            found = rank > 0
             hits += 1 if found else 0
-            self.stdout.write(f"[{'OK ' if found else 'MISS'}] {question}")
+            reciprocal_ranks.append(1.0 / rank if rank > 0 else 0.0)
+
+            pos = f"pos {rank}" if rank > 0 else "no encontrado"
+            self.stdout.write(f"[{'OK ' if found else 'MISS'}] ({pos}) {question}")
 
         total = len(gold)
         recall = hits / total if total else 0.0
+        mrr = sum(reciprocal_ranks) / total if total else 0.0
         self.stdout.write(self.style.SUCCESS(f"\nRecall@{top_k}: {hits}/{total} = {recall:.0%}"))
+        self.stdout.write(self.style.SUCCESS(f"MRR@{top_k}: {mrr:.3f}"))
