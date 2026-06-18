@@ -13,6 +13,7 @@ from .views import (
     repo_delete,
     document_delete,
     documentation_view,
+    document_content_view,
     generate_documentation_trigger,
     agent_view,
     ask_view,
@@ -42,5 +43,6 @@ urlpatterns = [
     # UI (interfaz humana)
     path("ask/ui/", ask_page, name="ask_ui"),
     path("documentation/<int:pk>/", documentation_view, name="documentation"),
+    path("documents/<int:pk>/view/", document_content_view, name="document_content"),
     path("documentation/<int:pk>/generate/", generate_documentation_trigger, name="documentation_generate"),
 ]

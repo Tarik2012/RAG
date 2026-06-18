@@ -121,6 +121,10 @@
                       {% endif %}
                       {{ doc.status }}
                     </span>
+                    <a href="{% url 'documents:document_content' doc.pk %}"
+                       class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
+                      Ver
+                    </a>
                     {% if doc.status == 'processed' %}
                       {% if doc.documentation_status == 'ready' %}
                         <a href="{% url 'documents:documentation' doc.pk %}"
@@ -181,6 +185,10 @@
                   {% endif %}
                   {{ document.status }}
                 </span>
+                <a href="{% url 'documents:document_content' document.pk %}"
+                   class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
+                  Ver
+                </a>
                 {% if document.status == 'processed' %}
                   {% if document.documentation_status == 'ready' %}
                     <a href="{% url 'documents:documentation' document.pk %}"

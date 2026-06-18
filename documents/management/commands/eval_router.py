@@ -4,7 +4,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand
 
-from documents.services.router import classify_intent
+from documents.services.router import classify_message
 
 
 class Command(BaseCommand):
@@ -25,7 +25,7 @@ class Command(BaseCommand):
         for item in gold:
             question = item["question"]
             expected = item["expected"]
-            got = classify_intent(question)
+            got = classify_message(question)
 
             total_by_label[expected] += 1
 

@@ -15,6 +15,7 @@ from documents.models import Conversation, Document, Message, Project
 from documents.services.agent.agent import build_agent
 from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
+from documents.services.extraction.text_extraction import get_document_full_text
 from documents.services.llm.openai_llm_provider import OpenAILLMProvider
 from documents.services.retrieval.query_rewriter import QueryRewriter
 from documents.services.retrieval.reranker import CrossEncoderReranker
@@ -356,6 +357,16 @@ def repo_delete(request, project_id):
 def documentation_view(request, pk):
     document = get_object_or_404(Document, pk=pk, owner=request.user)
     return render(request, "documents/documentation.html", {"document": document})
+
+
+@login_required
+def document_content_view(request, pk):
+    document = get_object_or_404(Document, pk=pk, owner=request.user)
+    content = get_document_full_text(document)
+    return render(request, "documents/document_content.html", {
+        "document": document,
+        "content": content,
+    })
 
 
 @login_required
