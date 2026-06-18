@@ -121,7 +121,7 @@ def build_read_file_tool(retriever, user, project=None):
         """
         if not document_name or not document_name.strip():
             return "No document_name provided. Specify which file to read."
-        logger.info("tool used: analyze_code")
+        logger.info("tool used: read_full_file")
         documents_qs = Document.objects.filter(
             owner=user, status="processed", original_name__icontains=document_name,
         )
