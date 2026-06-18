@@ -9,7 +9,7 @@ from documents.forms import DocumentUploadForm
 pytestmark = pytest.mark.django_db
 
 
-def test_valid_pdf_is_accepted():
+def test_pdf_is_rejected():
     uploaded = SimpleUploadedFile(
         "doc.pdf",
         b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n",
@@ -17,7 +17,7 @@ def test_valid_pdf_is_accepted():
     )
     form = DocumentUploadForm(data={"original_name": "Test"}, files={"file": uploaded})
 
-    assert form.is_valid() is True
+    assert not form.is_valid()
 
 
 def test_fake_pdf_is_rejected():

@@ -47,7 +47,7 @@ class DocumentUploadForm(forms.ModelForm):
                     "file:text-gray-700 "
                     "hover:file:bg-gray-200"
                 ),
-                "accept": ".pdf,.csv,.py,.js,.ts,.java,.cs,.cpp,.go,.rb,.php,.swift,.kt,.html,.htm,.css,.json,.xml,.yaml,.yml,.md,.txt,.rst",
+                "accept": ".csv,.py,.js,.ts,.java,.cs,.cpp,.go,.rb,.php,.swift,.kt,.html,.htm,.css,.json,.xml,.yaml,.yml,.md,.txt,.rst",
             }),
         }
 
@@ -65,11 +65,6 @@ class DocumentUploadForm(forms.ModelForm):
         uploaded.seek(0)
         kind = filetype.guess(head)
         ext = Path(uploaded.name or "").suffix.lower()
-
-        if ext == ".pdf":
-            if kind is None or kind.mime != "application/pdf":
-                raise forms.ValidationError("El archivo no es un PDF válido.")
-            return uploaded
 
         if ext in TEXT_EXTENSIONS:
             if kind is not None:

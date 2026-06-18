@@ -19,7 +19,7 @@
 
   <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
     <div class="p-6">
-      <h3 class="text-lg font-semibold text-gray-800 mb-4">Documents</h3>
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Archivos</h3>
       <form
         method="post"
         action="{% url 'documents:upload' %}"
@@ -33,7 +33,7 @@
             for="{{ form.original_name.id_for_label }}"
             class="block text-sm font-medium text-gray-700"
           >
-            Document name
+            Nombre del archivo
           </label>
           <div class="mt-1">
             {{ form.original_name }}
@@ -54,7 +54,7 @@
           type="submit"
           class="inline-flex items-center rounded-md bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 transition shadow-sm"
         >
-          Upload document
+          Subir archivo
         </button>
       </form>
 
@@ -214,7 +214,7 @@
                   {% endif %}
                 {% endif %}
                 <form method="post" action="{% url 'documents:delete' document.pk %}"
-                      onsubmit="return confirm('Borrar este documento?')">
+                      onsubmit="return confirm('Borrar este archivo?')">
                   {% csrf_token %}
                   <button type="submit"
                     class="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50">
@@ -226,7 +226,7 @@
           </div>
         {% empty %}
           {% if not repo_groups %}
-          <p class="text-sm text-gray-500">No documents in this project.</p>
+          <p class="text-sm text-gray-500">No hay archivos en este proyecto.</p>
           {% endif %}
         {% endfor %}
       </div>

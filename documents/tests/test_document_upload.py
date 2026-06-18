@@ -13,15 +13,15 @@ def test_document_upload_enqueues_task(client, user, settings, media_root):
     client.login(username="tester", password="pass1234")
 
     upload = SimpleUploadedFile(
-        "test.pdf",
-        b"%PDF-1.4\n%EOF",
-        content_type="application/pdf",
+        "test.py",
+        b"def hola():\n    return 'hola'\n",
+        content_type="text/x-python",
     )
 
     with patch("documents.views.process_document_task.delay") as delay:
         response = client.post(
             reverse("documents:upload"),
-            {"original_name": "test.pdf", "file": upload},
+            {"original_name": "test.py", "file": upload},
         )
 
     assert response.status_code == 302
@@ -37,9 +37,9 @@ def test_document_upload_does_not_call_sync_processing(client, user, settings, m
     client.login(username="tester", password="pass1234")
 
     upload = SimpleUploadedFile(
-        "test.pdf",
-        b"%PDF-1.4\n%EOF",
-        content_type="application/pdf",
+        "test.py",
+        b"def hola():\n    return 'hola'\n",
+        content_type="text/x-python",
     )
 
     with (
@@ -48,7 +48,7 @@ def test_document_upload_does_not_call_sync_processing(client, user, settings, m
     ):
         response = client.post(
             reverse("documents:upload"),
-            {"original_name": "test.pdf", "file": upload},
+            {"original_name": "test.py", "file": upload},
         )
 
     assert response.status_code == 302
