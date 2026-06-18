@@ -119,13 +119,15 @@ def build_read_file_tool(retriever, user, project=None):
             query: The user's goal or question about the file.
             document_name: The name of the file to read (one of the user's uploaded files).
         """
+        if not document_name or not document_name.strip():
+            return "No document_name provided. Specify which file to read."
         logger.info("tool used: analyze_code")
         documents_qs = Document.objects.filter(
             owner=user, status="processed", original_name__icontains=document_name,
         )
         if project is not None:
             documents_qs = documents_qs.filter(project=project)
-        document = documents_qs.first()
+        document = documents_qs.order_by("id").first()
         if document is None:
             available_qs = Document.objects.filter(owner=user, status="processed")
             if project is not None:
@@ -223,7 +225,7 @@ def build_agent(user, project=None):
     def reflect(state: AgentState) -> dict:
         messages = state["messages"]
         question = next(
-            (m.content for m in messages if getattr(m, "type", None) == "human"),
+            (m.content for m in reversed(messages) if getattr(m, "type", None) == "human"),
             "",
         )
         answer = messages[-1].content if messages else ""
@@ -244,7 +246,7 @@ def build_agent(user, project=None):
     def reformulate(state: AgentState) -> dict:
         messages = list(state["messages"])
         original_question = next(
-            (m.content for m in messages if getattr(m, "type", None) == "human"),
+            (m.content for m in reversed(messages) if getattr(m, "type", None) == "human"),
             "",
         )
         reformulated_question = query_rewriter.reformulate(original_question)

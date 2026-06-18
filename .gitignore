@@ -22,3 +22,5 @@ media/
 id_ed25519
 id_rsa
 
+
+.claude/

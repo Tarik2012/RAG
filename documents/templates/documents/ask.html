@@ -5,42 +5,64 @@
 {% block content %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 
-<div class="flex flex-col h-[calc(100vh-4rem)] max-w-3xl mx-auto">
+<div class="flex flex-col h-[calc(100vh-4rem)]">
 
-  <!-- Mensajes -->
-  <div id="chat-scroll" class="flex-1 overflow-y-auto py-6 space-y-4">
+  <div id="chat-scroll" class="flex-1 overflow-y-auto py-8">
+    <div class="max-w-3xl mx-auto px-4 space-y-6">
     {% if history %}
       {% for message in history %}
         {% if message.role == "user" %}
-          <div class="flex justify-end">
-            <div class="max-w-[75%] rounded-2xl rounded-br-sm bg-accent text-white px-4 py-2.5 text-sm whitespace-pre-wrap">{{ message.content }}</div>
+          <div class="flex justify-end items-start gap-3">
+            <div class="max-w-[70%] rounded-2xl rounded-br-md bg-accent text-white px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed">{{ message.content }}</div>
+            <div class="w-7 h-7 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-medium flex-shrink-0 mt-0.5">{{ request.user.username|first|upper }}</div>
           </div>
         {% else %}
-          <div class="flex justify-start">
-            <div class="max-w-[80%] rounded-2xl rounded-bl-sm bg-white border border-gray-200 px-4 py-3 text-sm text-gray-800 prose max-w-none" id="answer-{{ forloop.counter }}"></div>
+          <div class="flex justify-start items-start gap-3">
+            <div class="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+              </svg>
+            </div>
+            <div class="max-w-[78%]">
+              <div class="text-xs text-gray-400 mb-1">Asistente</div>
+              <div class="text-sm text-gray-800 leading-relaxed prose max-w-none" id="answer-{{ forloop.counter }}"></div>
+            </div>
             <script>document.getElementById('answer-{{ forloop.counter }}').innerHTML = marked.parse(`{{ message.content|escapejs }}`);</script>
           </div>
         {% endif %}
       {% endfor %}
     {% else %}
-      <div class="text-center text-sm text-gray-400 mt-12">No hay mensajes todavia. Haz tu primera pregunta abajo.</div>
+      <div class="text-center text-sm text-gray-400 mt-16">No hay mensajes todavÃ­a. Haz tu primera pregunta abajo.</div>
     {% endif %}
+    </div>
   </div>
 
-  <!-- Input fijo abajo -->
-  <div class="border-t border-gray-200 bg-gray-50 py-4">
-    <form method="post" id="ask-form" class="flex items-end gap-2">
+  <div class="max-w-3xl mx-auto w-full px-4 py-4">
+    <form method="post" id="ask-form">
       {% csrf_token %}
-      <textarea
-        name="question"
-        id="question-input"
-        rows="1"
-        required
-        class="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-accent focus:ring-2 focus:ring-accent/20 transition"
-        placeholder="Pregunta sobre tus documentos..."
-      ></textarea>
-      <button type="submit" name="action" value="ask" class="rounded-xl bg-accent px-5 py-3 text-sm font-medium text-white shadow-sm hover:bg-blue-500 transition">Enviar</button>
-      <button type="submit" name="action" value="clear" formnovalidate class="rounded-xl border border-gray-300 px-4 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100 transition">Nueva</button>
+      <div class="flex items-end gap-2 rounded-2xl border border-gray-300 bg-gray-50 px-3 py-2.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20 transition">
+        <textarea
+          name="question"
+          id="question-input"
+          rows="1"
+          required
+          class="flex-1 resize-none bg-transparent px-1 py-1.5 text-sm focus:outline-none leading-relaxed"
+          style="max-height: 200px; overflow-y: auto;"
+          placeholder="Pregunta sobre tus documentos..."
+        ></textarea>
+        <button type="submit" name="action" value="clear" formnovalidate
+          class="rounded-lg px-3 py-2 text-xs font-medium text-gray-500 hover:bg-gray-200 transition flex-shrink-0">Nueva</button>
+        <button type="submit" name="action" value="ask" id="ask-btn"
+          class="rounded-lg bg-accent w-9 h-9 flex items-center justify-center text-white hover:bg-blue-500 transition flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+          <svg id="ask-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+          </svg>
+          <svg id="ask-spinner" class="animate-spin h-4 w-4 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+          </svg>
+        </button>
+      </div>
     </form>
   </div>
 </div>
@@ -53,6 +75,13 @@
   const form = document.getElementById('ask-form');
   let submitting = false;
 
+  function autoGrow() {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+  }
+  input.addEventListener('input', autoGrow);
+  autoGrow();
+
   function submitAsk() {
     if (submitting) return;
     if (!input.value.trim()) return;
@@ -64,8 +93,10 @@
     form.appendChild(action);
     form.querySelectorAll('button').forEach(el => el.disabled = true);
     input.readOnly = true;
-    const btn = form.querySelector('button[value="ask"]');
-    if (btn) btn.textContent = 'Pensando...';
+    const askIcon = document.getElementById('ask-icon');
+    const askSpinner = document.getElementById('ask-spinner');
+    if (askIcon) askIcon.classList.add('hidden');
+    if (askSpinner) askSpinner.classList.remove('hidden');
     form.submit();
   }
 

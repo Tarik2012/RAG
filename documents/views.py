@@ -106,7 +106,9 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "- read_full_file: read one whole file for deep analysis, summaries, code review, or improvement proposals.\n"
         "- tavily_search: only for external/web information not in the user's files.\n\n"
         "RULES:\n"
-        "1. If the conversation history already contains the answer, use it. Do NOT call a tool again for something you already know from the recent messages.\n"
+        "1. ALWAYS answer the user's actual question with concrete, specific content. NEVER reply with a generic capabilities list or a vague greeting when the user asked something real.\n"
+        "1b. Reuse information from the conversation history ONLY when the user asks the SAME question about the SAME file. The moment the user mentions a DIFFERENT file name, repository, or topic, you MUST call read_full_file (or the appropriate tool) for that NEW file. NEVER answer about a file using content from a previously discussed different file.\n"
+        "1c. Before answering, identify the EXACT file the user is asking about in their CURRENT message. If it differs from the last file discussed, call the tool again for the new file. If you cannot tell which file, call list_repository_files or search_uploaded_files first.\n"
         "2. Always mention which file an answer comes from when relevant.\n"
         "3. Do not invent files, functions, or facts. If something is not in the files, say so.\n"
         "4. For casual remarks or greetings (e.g. 'thanks', 'nice', 'ok'), reply briefly and naturally WITHOUT calling any tool.\n"
@@ -363,6 +365,8 @@ def generate_documentation_trigger(request, pk):
         document.documentation_status = "processing"
         document.save(update_fields=["documentation_status"])
         generate_documentation_task.delay(document.id)
+    if document.project_id:
+        return redirect("documents:project_detail", project_id=document.project_id)
     return redirect("documents:list")
 
 
