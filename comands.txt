@@ -1,4 +1,0 @@
-en la terminal ubuntu : sudo service redis-server start
-celery -A rag_backend worker -l info --pool=solo
-
-python manage.py shell
