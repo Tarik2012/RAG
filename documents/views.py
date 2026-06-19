@@ -13,7 +13,6 @@ from django_ratelimit.decorators import ratelimit
 from .forms import DocumentUploadForm
 from documents.models import Conversation, Document, Message, Project
 from documents.services.agent.agent import build_agent
-from documents.services.ask.ask_service import AskService
 from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
 from documents.services.extraction.text_extraction import get_document_full_text
 from documents.services.llm.openai_llm_provider import OpenAILLMProvider
@@ -23,25 +22,6 @@ from documents.services.retrieval.retriever import Retriever
 from documents.tasks import generate_documentation_task, ingest_repo_task, process_document_task
 
 logger = logging.getLogger(__name__)
-
-
-def _build_ask_service() -> AskService:
-    embedding_provider = OpenAIEmbeddingProvider()
-    llm_provider = OpenAILLMProvider()
-    query_rewriter = QueryRewriter()
-    reranker = CrossEncoderReranker()
-
-    retriever = Retriever(
-        embedding_provider=embedding_provider,
-        query_rewriter=query_rewriter,
-        reranker=reranker,
-    )
-
-    return AskService(
-        retriever=retriever,
-        llm_provider=llm_provider,
-    )
-
 
 def _build_agent_service(user, project=None):
     return build_agent(user, project=project)
@@ -381,37 +361,6 @@ def generate_documentation_trigger(request, pk):
     if document.project_id:
         return redirect("documents:project_detail", project_id=document.project_id)
     return redirect("documents:list")
-
-
-@login_required
-@ratelimit(key="user", rate="20/m", block=True)
-@require_POST
-def ask_view(request):
-    try:
-        payload = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
-    question = payload.get("question")
-    if not question:
-        return JsonResponse({"error": "Missing 'question'"}, status=400)
-
-    try:
-        ask_service = _build_ask_service()
-        result = ask_service.ask(
-            question=question,
-            user=request.user,
-            top_k=6,
-        )
-    except Exception:
-        logger.exception("Agent failed for user %s", request.user.id)
-        return JsonResponse(
-            {"error": "Internal error processing the question"},
-            status=500,
-        )
-
-    return JsonResponse(result, status=200)
-
 
 @login_required
 @ratelimit(key="user", rate="20/m", block=True)
