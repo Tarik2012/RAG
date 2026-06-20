@@ -1,0 +1,39 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ document.original_name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+
+<div class="max-w-4xl mx-auto py-8">
+  <a href="javascript:history.back()" class="text-sm text-gray-500 hover:text-gray-700">← Volver</a>
+
+  <div class="mt-4 flex items-center justify-between">
+    <h1 class="text-2xl font-semibold text-gray-900">{{ document.original_name }}</h1>
+    <button id="copy-content"
+      class="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
+      Copiar
+    </button>
+  </div>
+  <p class="mt-1 text-sm text-gray-500">{{ document.content_type }}</p>
+
+  <div class="mt-6 rounded-xl border border-gray-200 overflow-hidden">
+    <pre class="overflow-x-auto text-sm"><code id="file-code">{{ content }}</code></pre>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  hljs.highlightElement(document.getElementById('file-code'));
+
+  const copyBtn = document.getElementById('copy-content');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      const code = document.getElementById('file-code').textContent;
+      navigator.clipboard.writeText(code);
+      copyBtn.textContent = 'Copiado ✓';
+      setTimeout(() => copyBtn.textContent = 'Copiar', 2000);
+    });
+  }
+</script>
+{% endblock %}

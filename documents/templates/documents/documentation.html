@@ -33,10 +33,14 @@
   {% if document.documentation_status == "ready" %}
     {{ document.documentation|json_script:"doc-markdown" }}
     <div class="bg-white shadow rounded-md overflow-hidden">
-      <div class="border-b border-gray-100 px-6 py-4">
+      <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
         <p class="text-sm text-gray-500">
           Documentación técnica generada para este archivo.
         </p>
+        <button id="download-doc"
+          class="rounded-md border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-600 transition hover:bg-blue-50">
+          Descargar .md
+        </button>
       </div>
       <div class="px-6 py-6">
         <div id="doc-content" class="prose max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700"></div>
@@ -45,6 +49,20 @@
     <script>
       const md = JSON.parse(document.getElementById('doc-markdown').textContent);
       document.getElementById('doc-content').innerHTML = marked.parse(md);
+      const downloadBtn = document.getElementById('download-doc');
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', () => {
+          const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = "{{ document.original_name }}.md";
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        });
+      }
     </script>
   {% elif document.documentation_status == "processing" %}
     <div class="bg-white shadow rounded-md overflow-hidden">

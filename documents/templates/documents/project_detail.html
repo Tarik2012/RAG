@@ -1,0 +1,316 @@
+{% extends "core/base.html" %}
+
+{% block title %}Project Detail | TariTech{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <h2 class="text-2xl font-semibold text-gray-800">{{ project.name }}</h2>
+      <p class="text-sm text-gray-500">{{ project.description|default:"No description." }}</p>
+    </div>
+    <a
+      href="{% url 'documents:project_list' %}"
+      class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+    >
+      Back to projects
+    </a>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
+    <div class="p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">Archivos</h3>
+      <form
+        method="post"
+        action="{% url 'documents:upload' %}"
+        enctype="multipart/form-data"
+        class="mb-6 space-y-4 rounded-xl border border-gray-200 bg-gray-50 p-4"
+      >
+        {% csrf_token %}
+        <input type="hidden" name="project_id" value="{{ project.id }}">
+        <div>
+          <label
+            for="{{ form.original_name.id_for_label }}"
+            class="block text-sm font-medium text-gray-700"
+          >
+            Nombre del archivo
+          </label>
+          <div class="mt-1">
+            {{ form.original_name }}
+          </div>
+        </div>
+        <div>
+          <label
+            for="{{ form.file.id_for_label }}"
+            class="block text-sm font-medium text-gray-700"
+          >
+            File
+          </label>
+          <div class="mt-1">
+            {{ form.file }}
+          </div>
+        </div>
+        <button
+          type="submit"
+          class="inline-flex items-center rounded-md bg-accent px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 transition shadow-sm"
+        >
+          Subir archivo
+        </button>
+      </form>
+
+      <form method="post" action="{% url 'documents:repo_ingest' %}" class="mb-6 flex flex-col gap-3 rounded-md bg-white p-4 shadow sm:flex-row sm:items-center">
+        {% csrf_token %}
+        <input type="hidden" name="project_id" value="{{ project.id }}">
+        <input
+          type="text"
+          name="repo_full"
+          placeholder="owner/repo (ej: Tarik2012/RAG)"
+          required
+          class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        >
+        <input
+          type="text"
+          name="branch"
+          placeholder="rama (opcional, ej: feature/mcp-client)"
+          class="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        >
+        <button
+          type="submit"
+          class="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+        >
+          Ingerir repo de GitHub
+        </button>
+      </form>
+
+      <div class="space-y-3">
+        {% for repo in repo_groups %}
+          <details class="mb-2 rounded-lg border border-gray-200 bg-white">
+            <summary class="flex cursor-pointer items-center justify-between gap-2 px-4 py-3 font-medium text-gray-800">
+              <span class="flex items-center gap-2">
+                <span>Repositorio: {{ repo.name }}</span>
+                <span class="text-xs text-gray-500">({{ repo.count }} archivos)</span>
+              </span>
+              <form method="post" action="{% url 'documents:repo_delete' project.id %}"
+                    onsubmit="return confirm('Borrar el repositorio {{ repo.name }} y todos sus archivos?')">
+                {% csrf_token %}
+                <input type="hidden" name="repo_name" value="{{ repo.name }}">
+                <button type="submit"
+                  class="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                  Eliminar repositorio
+                </button>
+              </form>
+            </summary>
+            <div class="border-t border-gray-100 px-4 py-2">
+              {% for doc in repo.files %}
+                <div class="flex items-center justify-between py-1.5 text-sm text-gray-700"
+                     data-doc-id="{{ doc.pk }}"
+                     data-doc-status="{{ doc.status }}"
+                     data-doc-doc-status="{{ doc.documentation_status }}">
+                  <span>{{ doc.original_name }}</span>
+                  <div class="flex items-center gap-3">
+                    <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium
+                      {% if doc.status == 'processed' %}bg-green-100 text-green-700
+                      {% elif doc.status == 'processing' or doc.status == 'uploaded' %}bg-yellow-100 text-yellow-700
+                      {% elif doc.status == 'failed' %}bg-red-100 text-red-700
+                      {% else %}bg-gray-100 text-gray-700{% endif %}">
+                      {% if doc.status == 'processing' or doc.status == 'uploaded' %}
+                        <svg class="animate-spin h-3 w-3 inline-block mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                        </svg>
+                      {% endif %}
+                      {{ doc.status }}
+                    </span>
+                    <a href="{% url 'documents:document_content' doc.pk %}"
+                       class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
+                      Ver
+                    </a>
+                    {% if doc.status == 'processed' %}
+                      {% if doc.documentation_status == 'ready' %}
+                        <a href="{% url 'documents:documentation' doc.pk %}"
+                           class="rounded-md border border-blue-300 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50">
+                          Ver doc
+                        </a>
+                      {% elif doc.documentation_status == 'processing' %}
+                        <span class="inline-flex items-center text-xs text-gray-500">
+                          <svg class="animate-spin h-3 w-3 inline-block mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                          </svg>
+                          Generando…
+                        </span>
+                      {% else %}
+                        <form method="post" action="{% url 'documents:documentation_generate' doc.pk %}">
+                          {% csrf_token %}
+                          <button type="submit"
+                            class="rounded-md border border-blue-300 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50">
+                            Documentar
+                          </button>
+                        </form>
+                      {% endif %}
+                    {% endif %}
+                    <form method="post" action="{% url 'documents:delete' doc.pk %}"
+                          onsubmit="return confirm('Borrar este archivo?')">
+                      {% csrf_token %}
+                      <button type="submit"
+                        class="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                        Eliminar
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </details>
+        {% endfor %}
+        {% for document in documents %}
+          <div
+            class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+            data-doc-id="{{ document.pk }}"
+            data-doc-status="{{ document.status }}"
+            data-doc-doc-status="{{ document.documentation_status }}"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium text-gray-800">{{ document.original_name }}</div>
+                <div class="text-sm text-gray-500">{{ document.content_type }} - {{ document.created_at|date:"Y-m-d H:i" }}</div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium {% if document.status == 'processed' %}bg-green-100 text-green-700{% elif document.status == 'processing' or document.status == 'uploaded' %}bg-yellow-100 text-yellow-700{% elif document.status == 'failed' %}bg-red-100 text-red-700{% else %}bg-gray-100 text-gray-700{% endif %}">
+                  {% if document.status == 'processing' or document.status == 'uploaded' %}
+                    <svg class="animate-spin h-3 w-3 inline-block mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                    </svg>
+                  {% endif %}
+                  {{ document.status }}
+                </span>
+                <a href="{% url 'documents:document_content' document.pk %}"
+                   class="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50">
+                  Ver
+                </a>
+                {% if document.status == 'processed' %}
+                  {% if document.documentation_status == 'ready' %}
+                    <a href="{% url 'documents:documentation' document.pk %}"
+                       class="rounded-md border border-blue-300 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50">
+                      Ver doc
+                    </a>
+                  {% elif document.documentation_status == 'processing' %}
+                    <span class="inline-flex items-center text-xs text-gray-500">
+                      <svg class="animate-spin h-3 w-3 inline-block mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+                      </svg>
+                      Generando…
+                    </span>
+                  {% else %}
+                    <form method="post" action="{% url 'documents:documentation_generate' document.pk %}">
+                      {% csrf_token %}
+                      <button type="submit"
+                        class="rounded-md border border-blue-300 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50">
+                        Documentar
+                      </button>
+                    </form>
+                  {% endif %}
+                {% endif %}
+                <form method="post" action="{% url 'documents:delete' document.pk %}"
+                      onsubmit="return confirm('Borrar este archivo?')">
+                  {% csrf_token %}
+                  <button type="submit"
+                    class="rounded-md border border-red-300 px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50">
+                    Eliminar
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% empty %}
+          {% if not repo_groups %}
+          <p class="text-sm text-gray-500">No hay archivos en este proyecto.</p>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
+    <div class="p-6">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <h3 class="text-lg font-semibold text-gray-800">Conversations</h3>
+        <form method="post" action="{% url 'documents:conversation_create' project.id %}">
+          {% csrf_token %}
+          <button
+            type="submit"
+            class="inline-flex items-center rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition shadow-sm"
+          >
+            Nueva conversacion
+          </button>
+        </form>
+      </div>
+      <div class="space-y-3">
+        {% for conversation in conversations %}
+          <div class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <a
+                  href="{% url 'documents:conversation_open' conversation.id %}"
+                  class="font-medium text-blue-600 hover:text-blue-800 transition"
+                >
+                  {{ conversation.title|default:"Sin titulo" }}
+                </a>
+                <div class="text-sm text-gray-500">Updated {{ conversation.updated_at|date:"Y-m-d H:i" }}</div>
+              </div>
+              <form method="post" action="{% url 'documents:conversation_delete' conversation.id %}">
+                {% csrf_token %}
+                <button
+                  type="submit"
+                  onclick="return confirm('Borrar esta conversacion?')"
+                  class="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                >
+                  Borrar
+                </button>
+              </form>
+            </div>
+          </div>
+        {% empty %}
+          <p class="text-sm text-gray-500">No conversations in this project.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const STATUS_URL = "{% url 'documents:status' %}";
+  const PENDING = ["uploaded", "processing"];
+
+  function hasPending() {
+    return Array.from(document.querySelectorAll("[data-doc-id]"))
+      .some(el => PENDING.includes(el.dataset.docStatus) || el.dataset.docDocStatus === "processing");
+  }
+
+  async function tick() {
+    if (!hasPending()) return;
+    try {
+      const res = await fetch(STATUS_URL);
+      if (!res.ok) return;
+      const data = await res.json();
+      const changed = data.documents.some(doc => {
+        const el = document.querySelector('[data-doc-id="' + doc.id + '"]');
+        return el && (
+          el.dataset.docStatus !== doc.status ||
+          el.dataset.docDocStatus !== doc.documentation_status
+        );
+      });
+      if (changed) { location.reload(); return; }
+    } catch (e) {}
+    setTimeout(tick, 3000);
+  }
+
+  if (hasPending()) setTimeout(tick, 3000);
+})();
+</script>
+{% endblock %}

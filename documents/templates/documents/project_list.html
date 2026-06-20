@@ -1,0 +1,99 @@
+{% extends "core/base.html" %}
+
+{% block title %}Projects | TariTech{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+  <div class="flex justify-between items-center">
+    <div>
+      <h2 class="text-2xl font-semibold text-gray-800">Projects</h2>
+      <p class="text-sm text-gray-500">Create and manage your private projects.</p>
+    </div>
+  </div>
+
+  <div class="bg-white border border-gray-200 rounded-2xl shadow-sm">
+    <form method="post" class="p-6 space-y-4">
+      {% csrf_token %}
+      <div>
+        <label for="id_name" class="block text-sm font-medium text-gray-700 mb-2">Name</label>
+        <input
+          id="id_name"
+          type="text"
+          name="name"
+          required
+          class="block w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-accent focus:ring-2 focus:ring-accent/20 transition"
+          placeholder="e.g. Internal policies"
+        >
+      </div>
+      <div>
+        <label for="id_description" class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+        <textarea
+          id="id_description"
+          name="description"
+          rows="3"
+          class="block w-full rounded-xl border border-gray-300 px-4 py-3 text-sm shadow-sm focus:border-accent focus:ring-2 focus:ring-accent/20 transition"
+          placeholder="Optional short description"
+        ></textarea>
+      </div>
+      <div class="pt-2">
+        <button
+          type="submit"
+          class="inline-flex items-center rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-accent/30 transition"
+        >
+          Create project
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="bg-white shadow rounded-md overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-100 text-gray-600">
+        <tr>
+          <th class="text-left px-4 py-3">Name</th>
+          <th class="text-left px-4 py-3">Description</th>
+          <th class="text-left px-4 py-3">Updated</th>
+          <th class="text-right px-4 py-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for project in projects %}
+          <tr class="border-t hover:bg-gray-50 transition">
+            <td class="px-4 py-3 font-medium text-gray-800">{{ project.name }}</td>
+            <td class="px-4 py-3 text-gray-600">{{ project.description|default:"-" }}</td>
+            <td class="px-4 py-3 text-gray-600">{{ project.updated_at|date:"Y-m-d H:i" }}</td>
+            <td class="px-4 py-3 text-right space-x-3">
+              <a
+                href="{% url 'documents:project_detail' project.id %}"
+                class="text-blue-600 hover:text-blue-800 text-sm font-medium transition"
+              >
+                View
+              </a>
+              <form
+                method="post"
+                action="{% url 'documents:project_delete' project.id %}"
+                class="inline"
+                onsubmit="return confirm('Delete this project?');"
+              >
+                {% csrf_token %}
+                <button
+                  type="submit"
+                  class="text-red-600 hover:text-red-800 text-sm font-medium transition"
+                >
+                  Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="px-6 py-12 text-center">
+              <p class="text-gray-500 text-sm">No projects created yet.</p>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -4,7 +4,15 @@ from documents.models import Document
 from documents.services.github.repo_reader import fetch_file_content
 
 
-def ingest_repo_file(*, owner: str, repo: str, path: str, user, branch: str | None = None) -> Document:
+def ingest_repo_file(
+    *,
+    owner: str,
+    repo: str,
+    path: str,
+    user,
+    branch: str | None = None,
+    project_id=None,
+) -> Document:
     """Crea un Document a partir de un archivo del repo y lanza su ingesta."""
     from documents.tasks import process_document_task
 
@@ -17,6 +25,9 @@ def ingest_repo_file(*, owner: str, repo: str, path: str, user, branch: str | No
         size=len(content.encode("utf-8")),
         status="uploaded",
     )
+    if project_id:
+        from documents.models import Project
+        document.project = Project.objects.filter(id=project_id, user=user).first()
     safe_name = path.replace("/", "_")
     document.file.save(safe_name, ContentFile(content.encode("utf-8")), save=False)
     document.save()

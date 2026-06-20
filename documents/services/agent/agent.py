@@ -43,7 +43,7 @@ def _get_query_rewriter():
 @lru_cache(maxsize=1)
 def _get_llm():
     return ChatOpenAI(
-        model=getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"),
+        model=getattr(settings, "OPENAI_AGENT_MODEL", "gpt-4.1"),
         temperature=0,
     )
 
@@ -78,38 +78,61 @@ def _get_mcp_tools():
         return []
 
 
-def build_rag_tool(retriever, user):
+def build_search_tool(retriever, user, project=None):
     @tool
-    def search_document(query: str) -> str:
-        """Search the user's documents for information, text, policies, data or any content.
-        Use this for general questions about the document content."""
-        logger.info("tool used: search_document")
-        results = retriever.retrieve(query=query, user=user, top_k=5)
-        if not results:
-            return "No relevant information found in the document"
+    def search_uploaded_files(query: str) -> str:
+        """Search across all the user's uploaded files and return the most relevant passages with their source file name.
 
-        return "\n\n".join(chunk.text for chunk, _ in results)
+        Use this first to find where information appears, gather evidence from excerpts, or compare across files.
+        Do not use this when the user needs the full content of one specific file; use read_full_file instead.
 
-    return search_document
-
-
-def build_code_analysis_tool(retriever, user):
-    @tool
-    def analyze_code(query: str, document_name: str) -> str:
-        """Use this tool for ANY request involving code: improving, fixing bugs, optimizing,
-        refactoring, explaining, documenting, reviewing code quality, or auditing security.
-        'document_name' is the name of the file to analyze (one of the user's uploaded files).
-        Review the full code, always check for hardcoded secrets/credentials, and report only
-        issues actually present in the code. Do not invent problems not visible in the file."""
-        logger.info("tool used: analyze_code")
-        document = Document.objects.filter(
-            owner=user, status="processed", original_name__icontains=document_name,
-        ).first()
-        if document is None:
-            available = list(
-                Document.objects.filter(owner=user, status="processed")
-                .values_list("original_name", flat=True)
+        Args:
+            query: The search terms or question to look for across the files.
+        """
+        logger.info("tool used: search_uploaded_files")
+        document_ids = None
+        if project is not None:
+            document_ids = list(
+                Document.objects.filter(owner=user, status="processed", project=project)
+                .values_list("id", flat=True)
             )
+        results = retriever.retrieve(query=query, user=user, top_k=5, document_ids=document_ids)
+        if not results:
+            return "No relevant information found in the uploaded files."
+
+        return "\n\n".join(
+            f"[Source: {chunk.document.original_name}]\n{chunk.text}"
+            for chunk, _ in results
+        )
+
+    return search_uploaded_files
+
+
+def build_read_file_tool(retriever, user, project=None):
+    @tool
+    def read_full_file(query: str, document_name: str) -> str:
+        """Read one uploaded file in full and use it to answer the user's request.
+
+        Use this for deep explanations, full-file summaries, reviewing or analyzing code, config, markdown or documentation, and proposing improvements. This is the right tool when the whole file context matters.
+
+        Args:
+            query: The user's goal or question about the file.
+            document_name: The name of the file to read (one of the user's uploaded files).
+        """
+        if not document_name or not document_name.strip():
+            return "No document_name provided. Specify which file to read."
+        logger.info("tool used: read_full_file")
+        documents_qs = Document.objects.filter(
+            owner=user, status="processed", original_name__icontains=document_name,
+        )
+        if project is not None:
+            documents_qs = documents_qs.filter(project=project)
+        document = documents_qs.order_by("id").first()
+        if document is None:
+            available_qs = Document.objects.filter(owner=user, status="processed")
+            if project is not None:
+                available_qs = available_qs.filter(project=project)
+            available = list(available_qs.values_list("original_name", flat=True))
             return f"No file matching '{document_name}'. Available files: {', '.join(available) or 'none'}."
         full_text = get_document_full_text(document)
         if not full_text.strip():
@@ -128,13 +151,41 @@ def build_code_analysis_tool(retriever, user):
             f"{truncated}{nota}"
         )
 
-    return analyze_code
+    return read_full_file
+
+
+def build_list_files_tool(user, project=None):
+    @tool
+    def list_repository_files(query: str = "") -> str:
+        """List the names of all the user's uploaded and processed files.
+
+        Use this to discover which files are available before deciding which one to read, or when the user asks what files or repository contents exist.
+
+        Args:
+            query: Optional filter text to narrow the listing (substring match on file name).
+        """
+        logger.info("tool used: list_repository_files")
+        qs = Document.objects.filter(owner=user, status="processed")
+        if project is not None:
+            qs = qs.filter(project=project)
+        if query:
+            qs = qs.filter(original_name__icontains=query)
+        nombres = list(qs.values_list("original_name", flat=True))
+        if not nombres:
+            return "No processed files available."
+        return "Available files:\n" + "\n".join(f"- {n}" for n in nombres)
+
+    return list_repository_files
 
 
 def build_tavily_tool():
     @tool("tavily_search")
     def tavily_search(query: str) -> str:
-        """Search the web for recent external information when the active document is insufficient."""
+        """Search the web for recent external information only when the uploaded files do not contain the answer or the user explicitly asks for external sources.
+
+        Args:
+            query: The web search query.
+        """
         logger.info("tool used: tavily_search")
         result = _get_tavily_tool().invoke({"query": query})
         return str(result)
@@ -148,7 +199,7 @@ class AgentState(TypedDict, total=False):
     retries: int
 
 
-def build_agent(user):
+def build_agent(user, project=None):
     retriever = Retriever(
         embedding_provider=_get_embedding_provider(),
         query_rewriter=_get_query_rewriter(),
@@ -156,8 +207,9 @@ def build_agent(user):
     )
 
     tools = [
-        build_rag_tool(retriever, user),
-        build_code_analysis_tool(retriever, user),
+        build_search_tool(retriever, user, project=project),
+        build_read_file_tool(retriever, user, project=project),
+        build_list_files_tool(user, project=project),
         build_tavily_tool(),
     ]
     tools = tools + _get_mcp_tools()
@@ -173,7 +225,7 @@ def build_agent(user):
     def reflect(state: AgentState) -> dict:
         messages = state["messages"]
         question = next(
-            (m.content for m in messages if getattr(m, "type", None) == "human"),
+            (m.content for m in reversed(messages) if getattr(m, "type", None) == "human"),
             "",
         )
         answer = messages[-1].content if messages else ""
@@ -194,7 +246,7 @@ def build_agent(user):
     def reformulate(state: AgentState) -> dict:
         messages = list(state["messages"])
         original_question = next(
-            (m.content for m in messages if getattr(m, "type", None) == "human"),
+            (m.content for m in reversed(messages) if getattr(m, "type", None) == "human"),
             "",
         )
         reformulated_question = query_rewriter.reformulate(original_question)

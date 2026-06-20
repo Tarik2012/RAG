@@ -22,7 +22,7 @@ def test_not_follow_up_for_new_question():
 
 
 @pytest.mark.django_db
-def test_build_agent_messages_no_history_for_new_question(django_user_model):
+def test_build_agent_messages_includes_history_for_new_question(django_user_model):
     user = django_user_model.objects.create_user(
         username="follow-up-new-question",
         password="pass1234",
@@ -38,9 +38,13 @@ def test_build_agent_messages_no_history_for_new_question(django_user_model):
         history=history,
     )
 
-    assert len(messages) == 2
+    assert len(messages) == 4
     assert messages[0]["role"] == "system"
-    assert messages[1] == {"role": "user", "content": "que hace document_processor.py"}
+    assert messages[1:] == [
+        {"role": "user", "content": "explica document_processor.py"},
+        {"role": "assistant", "content": "procesa documentos y chunks"},
+        {"role": "user", "content": "que hace document_processor.py"},
+    ]
 
 
 @pytest.mark.django_db

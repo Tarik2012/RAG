@@ -6,31 +6,31 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 
-def classify_intent(question: str) -> str:
+def classify_message(message: str) -> str:
+    """Clasifica un mensaje como 'chat' (charla casual) o 'agent' (pregunta real)."""
     if not settings.OPENAI_API_KEY:
-        logger.warning("Intent router fallback to rag: OPENAI_API_KEY is not set")
-        return "rag"
-
+        return "agent"
     try:
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
         response = client.responses.create(
             model="gpt-4o-mini",
             temperature=0,
             instructions=(
-                "You are an intent classifier. "
-                "Return ONLY one word, with no explanation: rag or agent. "
-                "Return agent if the question requires external tools "
-                "(web search, GitHub consultation, or multi-step code analysis/navigation). "
-                "Return rag if the question can be answered from the user's uploaded documents."
+                "You classify a user message for a code/document assistant. "
+                "Reply with ONLY one word: chat or agent.\n"
+                "Reply 'chat' ONLY if the message is a pure greeting, thanks, or acknowledgement "
+                "with no task and no topic, like: 'hola', 'gracias', 'ok', 'perfecto', 'buenas', 'adios'.\n"
+                "Reply 'agent' for EVERYTHING else: any question, any instruction or task "
+                "(e.g. 'analiza views.py', 'vamos a trabajar con el repo X', 'que hace este archivo', "
+                "'resume el codigo'), or anything mentioning files, code, repos, or documents. "
+                "When in doubt, reply 'agent'."
             ),
-            input=(question or "").strip(),
+            input=(message or "").strip(),
         )
         intent = (response.output_text or "").strip().lower()
-        if intent in {"rag", "agent"}:
+        if intent in {"chat", "agent"}:
             return intent
-
-        logger.warning("Intent router fallback to rag: invalid model output '%s'", intent)
-        return "rag"
+        return "agent"
     except Exception:
-        logger.exception("Intent router fallback to rag")
-        return "rag"
+        logger.exception("Message router fallback to agent")
+        return "agent"

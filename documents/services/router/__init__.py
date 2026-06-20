@@ -1,3 +1,3 @@
-from .intent_router import classify_intent
+from .intent_router import classify_message
 
-__all__ = ["classify_intent"]
+__all__ = ["classify_message"]
