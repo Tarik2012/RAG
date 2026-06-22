@@ -154,6 +154,77 @@ def build_read_file_tool(retriever, user, project=None):
     return read_full_file
 
 
+def build_static_analysis_tool(user, project=None):
+    from documents.services.agent.static_analysis import analyze_code
+
+    @tool
+    def run_static_analysis(document_name: str) -> str:
+        """Run a real static analysis security scanner (opengrep) on one uploaded code file and return verified findings.
+
+        Use this when the user asks about code quality, bugs, security vulnerabilities, or risks in a specific file. This runs an actual linter with 1000+ rules across many languages — prefer it over your own judgment when making claims about security or quality, because it returns verified results instead of guesses.
+
+        Args:
+            document_name: The name of the file to analyze (one of the user's uploaded files).
+        """
+        if not document_name or not document_name.strip():
+            return "No document_name provided. Specify which file to analyze."
+        logger.info("tool used: run_static_analysis")
+        documents_qs = Document.objects.filter(
+            owner=user, status="processed", original_name__icontains=document_name,
+        )
+        if project is not None:
+            documents_qs = documents_qs.filter(project=project)
+        document = documents_qs.order_by("id").first()
+        if document is None:
+            available_qs = Document.objects.filter(owner=user, status="processed")
+            if project is not None:
+                available_qs = available_qs.filter(project=project)
+            available = list(available_qs.values_list("original_name", flat=True))
+            return f"No file matching '{document_name}'. Available files: {', '.join(available) or 'none'}."
+
+        full_text = get_document_full_text(document)
+        if not full_text.strip():
+            return "The file is empty or its content could not be read."
+
+        MAX_CHARS = 50000
+        code = full_text[:MAX_CHARS]
+        truncated_note = "" if len(full_text) <= MAX_CHARS else "\n\n[Note: file truncated to 50000 chars before analysis.]"
+
+        import os as _os
+        suffix = _os.path.splitext(document.original_name)[1]
+        if not suffix:
+            ct = (document.content_type or "").lower()
+            ct_map = {
+                "text/x-python": ".py", "application/x-python": ".py",
+                "text/javascript": ".js", "application/javascript": ".js",
+                "text/x-java": ".java", "text/x-go": ".go",
+                "text/x-ruby": ".rb", "text/x-php": ".php",
+            }
+            suffix = ct_map.get(ct, "")
+
+        findings = analyze_code(code, document.original_name, suffix=suffix)
+
+        if findings.get("errors"):
+            return f"The analyzer reported errors: {findings['errors']}"
+
+        results = findings.get("results", [])
+        if not results:
+            return f"Static analysis ran successfully on {document.original_name} and found no issues.{truncated_note}"
+
+        lines = [f"Static analysis of {document.original_name} found {len(results)} issue(s):\n"]
+        for r in results[:25]:
+            check = r.get("check_id", "unknown-rule")
+            line_no = r.get("start", {}).get("line", "?")
+            msg = r.get("extra", {}).get("message", "").strip()
+            sev = r.get("extra", {}).get("severity", "")
+            lines.append(f"- [{sev}] line {line_no}: {msg} (rule: {check})")
+        if len(results) > 25:
+            lines.append(f"\n...and {len(results) - 25} more.")
+        return "\n".join(lines) + truncated_note
+
+    return run_static_analysis
+
+
 def build_list_files_tool(user, project=None):
     @tool
     def list_repository_files(query: str = "") -> str:
@@ -210,6 +281,7 @@ def build_agent(user, project=None):
         build_search_tool(retriever, user, project=project),
         build_read_file_tool(retriever, user, project=project),
         build_list_files_tool(user, project=project),
+        build_static_analysis_tool(user, project=project),
         build_tavily_tool(),
     ]
     tools = tools + _get_mcp_tools()

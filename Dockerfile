@@ -11,6 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash \
+    && OPENGREP_BIN="$(find /root/.opengrep -name 'opengrep*' -type f -executable | head -n1)" \
+    && cp "$OPENGREP_BIN" /usr/local/bin/opengrep \
+    && chmod +x /usr/local/bin/opengrep \
+    && opengrep --version
+
 COPY requirements.txt /app/requirements.txt
 
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
