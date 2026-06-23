@@ -11,6 +11,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Static analysis tool (opengrep) - pinned version, downloaded directly
+ARG OPENGREP_VERSION=v1.23.0
+RUN curl -fsSL --max-time 120 \
+      "https://github.com/opengrep/opengrep/releases/download/${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+      -o /usr/local/bin/opengrep \
+    && chmod +x /usr/local/bin/opengrep \
+    && opengrep --version
+
 COPY requirements.txt /app/requirements.txt
 
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu

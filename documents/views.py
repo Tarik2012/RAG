@@ -87,6 +87,7 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "- list_repository_files: list available files. Use it first when you are unsure which files exist.\n"
         "- search_uploaded_files: find relevant passages across files (returns source file names).\n"
         "- read_full_file: read one whole file for deep analysis, summaries, code review, or improvement proposals.\n"
+        "- run_static_analysis: run a real security/quality scanner (opengrep, 1000+ rules, many languages) on one file. Use it whenever the user asks about bugs, vulnerabilities, security risks, or code quality of a specific file — its findings are verified, unlike your own guesses.\n"
         "- tavily_search: only for external/web information not in the user's files.\n\n"
         "RULES:\n"
         "1. ALWAYS answer the user's actual question with concrete, specific content. NEVER reply with a generic capabilities list or a vague greeting when the user asked something real.\n"
@@ -95,7 +96,8 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "2. Always mention which file an answer comes from when relevant.\n"
         "3. Do not invent files, functions, or facts. If something is not in the files, say so.\n"
         "4. For casual remarks or greetings (e.g. 'thanks', 'nice', 'ok'), reply briefly and naturally WITHOUT calling any tool.\n"
-        "5. Prefer search_uploaded_files for broad questions and read_full_file when the whole file matters."
+        "5. Prefer search_uploaded_files for broad questions and read_full_file when the whole file matters.\n"
+        "6. When the user asks about security, vulnerabilities, bugs, or code quality of a specific file, ALWAYS use run_static_analysis to get verified findings before answering. Do not rely only on reading the code yourself for these claims."
     )
 
     if not nombres:
@@ -398,6 +400,7 @@ def agent_view(request):
 
 
 @login_required
+@ratelimit(key="user", rate="30/m", block=True)
 def ask_page(request):
     conversation_id = request.session.get("conversation_id")
     if conversation_id:

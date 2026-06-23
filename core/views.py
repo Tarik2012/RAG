@@ -1,6 +1,7 @@
 from django.contrib.auth import login
 from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import redirect, render
+from django_ratelimit.decorators import ratelimit
 from documents.models import Document, DocumentChunk
 
 
@@ -16,6 +17,7 @@ def home(request):
     return render(request, "core/home.html", context)
 
 
+@ratelimit(key="ip", rate="10/h", block=True)
 def signup(request):
     if request.user.is_authenticated:
         return redirect("documents:list")
