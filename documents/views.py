@@ -400,6 +400,7 @@ def agent_view(request):
 
 
 @login_required
+@ratelimit(key="user", rate="30/m", block=True)
 def ask_page(request):
     conversation_id = request.session.get("conversation_id")
     if conversation_id:

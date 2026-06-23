@@ -72,7 +72,10 @@ def ingest_repo_task(
     user = get_user_model().objects.get(id=user_id)
     branch = branch or get_default_branch(owner, repo)
     source = f"github:{owner}/{repo}"
-    Document.objects.filter(owner=user, source=source).delete()
+    delete_qs = Document.objects.filter(owner=user, source=source)
+    if project_id is not None:
+        delete_qs = delete_qs.filter(project_id=project_id)
+    delete_qs.delete()
     paths = list_repo_code_files(owner, repo, branch)
     created = 0
     for path in paths:
