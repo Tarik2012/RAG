@@ -1,0 +1,20 @@
+[
+  {
+    "question": "¿Tiene el archivo lagacy alguna vulnerabilidad de seguridad? ¿Cuál y en qué línea?",
+    "document": "lagacy",
+    "must_contain": ["SQL", "137"],
+    "must_not_contain": []
+  },
+  {
+    "question": "¿Hay riesgo de inyección SQL en el archivo lagacy?",
+    "document": "lagacy",
+    "must_contain": ["inyección", "concatena"],
+    "must_not_contain": []
+  },
+  {
+    "question": "Analiza la seguridad del archivo lagacy y dime si es seguro guardar pedidos en la base de datos.",
+    "document": "lagacy",
+    "must_contain": ["SQL"],
+    "must_not_contain": ["no se encontraron problemas", "totalmente seguro", "sí es seguro", "es completamente seguro"]
+  }
+]
