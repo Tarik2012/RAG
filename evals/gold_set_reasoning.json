@@ -1,0 +1,26 @@
+[
+  {
+    "question": "¿Qué ocurre si se intenta descontar stock de un SKU que no existe en el inventario?",
+    "expected_snippets": ["None", "descontar_stock"]
+  },
+  {
+    "question": "¿Por qué la conexión a la base de datos en conectar_db puede quedar abierta sin cerrarse?",
+    "expected_snippets": ["context manager", "conectar_db"]
+  },
+  {
+    "question": "Si un pedido contiene un producto que no está en el inventario, ¿qué hace el procesador con ese item?",
+    "expected_snippets": ["continue", "ignora"]
+  },
+  {
+    "question": "¿Por qué calcular_descuento puede aplicar un descuento mayor al esperado a un cliente VIP?",
+    "expected_snippets": ["0.05", "vip"]
+  },
+  {
+    "question": "¿Qué problema de seguridad tiene la función que guarda el pedido en la base de datos?",
+    "expected_snippets": ["inyección", "SQL"]
+  },
+  {
+    "question": "¿Por qué el estado global CONFIG es una mala práctica en este módulo?",
+    "expected_snippets": ["global", "CONFIG"]
+  }
+]
