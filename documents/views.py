@@ -143,6 +143,44 @@ def _append_tools_to_answer(answer: str, tool_names: list[str]) -> str:
     return f"{answer}\n\nTools usadas: {tools_label}"
 
 
+def _extract_used_documents(result) -> list[str]:
+    """Saca los document_name pasados a las tools que reciben un archivo."""
+    names: list[str] = []
+    for message in result.get("messages", []):
+        tool_calls = getattr(message, "tool_calls", None) or []
+        for tool_call in tool_calls:
+            args = tool_call.get("args") or {}
+            doc_name = args.get("document_name")
+            if doc_name:
+                names.append(doc_name)
+    return list(dict.fromkeys(names))
+
+
+def _append_sources_to_answer(answer: str, result, user, project=None) -> str:
+    """Añade una seccion 'Fuentes' con enlaces Markdown a los archivos citados."""
+    from django.urls import reverse
+
+    names = _extract_used_documents(result)
+    if not names:
+        return answer
+
+    links = []
+    seen_ids = set()
+    for name in names:
+        qs = Document.objects.filter(owner=user, status="processed", original_name__icontains=name)
+        if project is not None:
+            qs = qs.filter(project=project)
+        doc = qs.order_by("id").first()
+        if doc and doc.id not in seen_ids:
+            seen_ids.add(doc.id)
+            url = reverse("documents:document_content", args=[doc.id])
+            links.append(f"- [{doc.original_name}]({url})")
+
+    if not links:
+        return answer
+    return answer + "\n\n**Fuentes:**\n" + "\n".join(links)
+
+
 @login_required
 def document_list(request):
     documents = Document.objects.filter(owner=request.user).order_by("-created_at")
@@ -450,6 +488,12 @@ def ask_page(request):
                 tool_names = _extract_called_tools(result)
                 logger.info("tools called: %s", tool_names)
                 answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
+                answer = _append_sources_to_answer(
+                    answer,
+                    result,
+                    request.user,
+                    project=conversation.project,
+                )
             except Exception:
                 logger.exception("Agent error")
                 answer = "Lo siento, ocurrio un error al procesar tu pregunta."
