@@ -27,7 +27,6 @@ jobs:
             echo "DB_PORT=5432"
             echo "OPENAI_API_KEY=${OPENAI_API_KEY}"
             echo "OPENAI_MODEL=gpt-4o-mini"
-            echo "RAG_LLM_PROVIDER=openai"
             echo "TAVILY_API_KEY=ci-dummy-tavily"
             echo "CELERY_BROKER_URL=redis://redis:6379/0"
             echo "GITHUB_PAT=ci-dummy-pat"
