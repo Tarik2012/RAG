@@ -15,7 +15,6 @@ from .views import (
     documentation_view,
     document_content_view,
     generate_documentation_trigger,
-    agent_view,
     ask_page,
 )
 
@@ -34,8 +33,6 @@ urlpatterns = [
     path("repos/ingest/", repo_ingest, name="repo_ingest"),
     path("projects/<int:project_id>/repos/delete/", repo_delete, name="repo_delete"),
     path("delete/<int:pk>/", document_delete, name="delete"),
-
-    path("agent/", agent_view, name="agent"),
 
     # UI (interfaz humana)
     path("ask/ui/", ask_page, name="ask_ui"),

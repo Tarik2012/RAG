@@ -161,8 +161,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_AGENT_MODEL = os.getenv("OPENAI_AGENT_MODEL", "gpt-4.1")
 OPENAI_JUDGE_MODEL = os.getenv("OPENAI_JUDGE_MODEL", "gpt-4.1")
-RAG_LLM_PROVIDER = os.getenv("RAG_LLM_PROVIDER", "fake")
-RATELIMIT_ENABLE = True
 
 LOGGING = {
     "version": 1,

@@ -13,12 +13,7 @@ from django_ratelimit.decorators import ratelimit
 from .forms import DocumentUploadForm
 from documents.models import Conversation, Document, Message, Project
 from documents.services.agent.agent import build_agent
-from documents.services.embeddings.openai_embedding_provider import OpenAIEmbeddingProvider
 from documents.services.extraction.text_extraction import get_document_full_text
-from documents.services.llm.openai_llm_provider import OpenAILLMProvider
-from documents.services.retrieval.query_rewriter import QueryRewriter
-from documents.services.retrieval.reranker import CrossEncoderReranker
-from documents.services.retrieval.retriever import Retriever
 from documents.tasks import generate_documentation_task, ingest_repo_task, process_document_task
 
 logger = logging.getLogger(__name__)
@@ -48,27 +43,6 @@ def _casual_reply(message: str) -> str:
     except Exception:
         logger.exception("Casual reply fallback")
         return "De nada."
-
-
-FOLLOW_UP_PREFIXES = (
-    "y ", "and ", "tambien", "tambien", "entonces",
-    "ok", "vale", "bien", "ahora", "sobre eso",
-    "de eso", "de ese", "de esa",
-)
-
-FOLLOW_UP_REFERENCES = (
-    "este archivo", "ese archivo", "este codigo", "ese codigo",
-    "esto", "eso", "lo anterior", "la anterior", "anterior",
-)
-
-
-def _looks_like_follow_up(question: str) -> bool:
-    normalized = question.strip().lower()
-    if not normalized:
-        return False
-    if normalized.startswith(FOLLOW_UP_PREFIXES):
-        return True
-    return any(ref in normalized for ref in FOLLOW_UP_REFERENCES)
 
 
 def _build_agent_messages(*, user, question: str, history: list | None = None, project=None) -> list[dict]:
@@ -402,41 +376,6 @@ def generate_documentation_trigger(request, pk):
     if document.project_id:
         return redirect("documents:project_detail", project_id=document.project_id)
     return redirect("documents:list")
-
-@login_required
-@ratelimit(key="user", rate="20/m", block=True)
-@require_POST
-def agent_view(request):
-    try:
-        payload = json.loads(request.body)
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON"}, status=400)
-
-    question = payload.get("question")
-    if not question:
-        return JsonResponse({"error": "Missing 'question'"}, status=400)
-
-    try:
-        agent = _build_agent_service(request.user)
-        result = agent.invoke({"messages": _build_agent_messages(user=request.user, question=question)})
-        tool_names = _extract_called_tools(result)
-        logger.info("tools called: %s", tool_names)
-        answer = _append_tools_to_answer(result["messages"][-1].content, tool_names)
-    except Exception:
-        logger.exception("Agent failed for user %s", request.user.id)
-        return JsonResponse(
-            {"error": "Internal error processing the question"},
-            status=500,
-        )
-
-    return JsonResponse(
-        {
-            "question": question,
-            "answer": answer,
-        },
-        status=200,
-    )
-
 
 @login_required
 @ratelimit(key="user", rate="30/m", block=True)
