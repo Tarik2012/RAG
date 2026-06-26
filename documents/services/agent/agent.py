@@ -225,6 +225,62 @@ def build_static_analysis_tool(user, project=None):
     return run_static_analysis
 
 
+def build_find_references_tool(user, project=None):
+    from documents.services.agent.find_references import find_symbol_usages
+    from documents.services.extraction.text_extraction import get_document_full_text
+
+    @tool
+    def find_references(symbol: str) -> str:
+        """Find where a Python function, class, or variable is USED across all the user's files.
+
+        Use this when the user asks who calls a function, where something is used, what depends on a symbol, or what would be affected by changing it. Results come from real AST parsing (tree-sitter), not text matching, so comments and strings are excluded. NOTE: this matches by name, so if two different symbols share the same name across files, both may appear. Currently supports Python files only.
+
+        Args:
+            symbol: The exact name of the function, class, or variable to find (e.g. 'analyze_code').
+        """
+        if not symbol or not symbol.strip():
+            return "No symbol provided. Specify the function, class, or variable name to find."
+        logger.info("tool used: find_references")
+        symbol = symbol.strip()
+
+        qs = Document.objects.filter(owner=user, status="processed")
+        if project is not None:
+            qs = qs.filter(project=project)
+
+        results = []
+        total = 0
+        for doc in qs:
+            name = doc.original_name
+            is_python = name.endswith(".py") or "python" in (doc.content_type or "").lower()
+            if not is_python:
+                continue
+            code = get_document_full_text(doc)
+            if not code.strip():
+                continue
+            try:
+                usages = find_symbol_usages(code, symbol)
+            except Exception as exc:
+                logger.warning("find_references fallo en %s: %s", name, exc)
+                continue
+            if usages:
+                results.append((name, usages))
+                total += len(usages)
+
+        if not results:
+            return f"No usages of '{symbol}' found in the Python files of this project."
+
+        lines = [f"Found {total} usage(s) of '{symbol}':\n"]
+        for name, usages in results:
+            lines.append(f"\n{name}:")
+            for u in usages[:30]:
+                lines.append(f"  line {u['line']}: {u['text']}")
+            if len(usages) > 30:
+                lines.append(f"  ...and {len(usages) - 30} more in this file.")
+        return "\n".join(lines)
+
+    return find_references
+
+
 def build_list_files_tool(user, project=None):
     @tool
     def list_repository_files(query: str = "") -> str:
@@ -282,6 +338,7 @@ def build_agent(user, project=None):
         build_read_file_tool(retriever, user, project=project),
         build_list_files_tool(user, project=project),
         build_static_analysis_tool(user, project=project),
+        build_find_references_tool(user, project=project),
         build_tavily_tool(),
     ]
     tools = tools + _get_mcp_tools()
