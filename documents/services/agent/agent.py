@@ -281,6 +281,72 @@ def build_find_references_tool(user, project=None):
     return find_references
 
 
+def build_save_memory_tool(user, project=None, conversation=None):
+    import hashlib
+
+    from documents.models import ProjectMemory
+
+    @tool
+    def save_memory(category: str, title: str, content: str) -> str:
+        """ALWAYS call this immediately after run_static_analysis confirms a security
+        vulnerability, or after you confirm a real bug, an architecture decision, or a decision
+        the user explicitly stated. This persists the finding so future conversations about this
+        project remember it. Saving is a REQUIRED follow-up step, not optional: if you just
+        reported a verified vulnerability or confirmed bug and did NOT call save_memory, you have
+        not finished the task.
+
+        Do NOT call it for trivial observations, casual remarks, generic advice, style nitpicks,
+        or uncertain impressions. One call per distinct finding.
+
+        Args:
+            category: one of 'bug', 'vulnerability', 'architecture', 'limitation', 'decision'.
+            title: a short one-line summary of the finding (max ~15 words).
+            content: the detail of the finding, including the file/symbol it concerns.
+        """
+        if project is None:
+            return "No project in context; cannot save memory."
+        valid = {"bug", "vulnerability", "architecture", "limitation", "decision"}
+        category = (category or "").strip().lower()
+        if category not in valid:
+            return f"Invalid category '{category}'. Use one of: {', '.join(sorted(valid))}."
+        title = (title or "").strip()
+        content = (content or "").strip()
+        if not title or not content:
+            return "Both title and content are required."
+
+        # fingerprint: dedup por project + category + title normalizado
+        norm = f"{project.id}:{category}:{title.lower()}"
+        fingerprint = hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+        logger.info("tool used: save_memory")
+        existing = ProjectMemory.objects.filter(
+            project=project,
+            fingerprint=fingerprint,
+        ).first()
+        if existing:
+            from django.utils import timezone
+
+            existing.times_seen += 1
+            existing.last_seen_at = timezone.now()
+            existing.content = content
+            existing.status = ProjectMemory.STATUS_ACTIVE
+            existing.save(update_fields=["times_seen", "last_seen_at", "content", "status", "updated_at"])
+            return f"Updated existing memory: '{title}' (seen {existing.times_seen}x)."
+
+        ProjectMemory.objects.create(
+            project=project,
+            user=user,
+            category=category,
+            title=title[:200],
+            content=content,
+            fingerprint=fingerprint,
+            source_conversation=conversation,
+        )
+        return f"Saved new memory: '{title}'."
+
+    return save_memory
+
+
 def build_list_files_tool(user, project=None):
     @tool
     def list_repository_files(query: str = "") -> str:
@@ -326,7 +392,7 @@ class AgentState(TypedDict, total=False):
     retries: int
 
 
-def build_agent(user, project=None):
+def build_agent(user, project=None, conversation=None):
     retriever = Retriever(
         embedding_provider=_get_embedding_provider(),
         query_rewriter=_get_query_rewriter(),
@@ -339,6 +405,7 @@ def build_agent(user, project=None):
         build_list_files_tool(user, project=project),
         build_static_analysis_tool(user, project=project),
         build_find_references_tool(user, project=project),
+        build_save_memory_tool(user, project=project, conversation=conversation),
         build_tavily_tool(),
     ]
     tools = tools + _get_mcp_tools()

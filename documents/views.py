@@ -63,6 +63,7 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "- read_full_file: read one whole file for deep analysis, summaries, code review, or improvement proposals.\n"
         "- run_static_analysis: run a real static security scanner (opengrep, 1000+ rules, many languages) on one file. It detects security vulnerabilities and bug patterns (SQL injection, eval, hardcoded secrets, etc.) with VERIFIED findings. It does NOT evaluate code style, architecture, naming, or 'legacy-ness'. Those require reading the file.\n"
         "- find_references: find where a function, class, or variable is USED across all Python files in the project (real AST parsing, not text matching). Use it when the user asks who calls something, where a symbol is used, what depends on it, or what would be affected by changing it. Takes a symbol NAME, not a file name.\n"
+        "- save_memory: remember an important, durable finding about this project (verified vulnerability, confirmed bug, architecture decision, user decision) so it persists across future conversations. Use ONLY for high-confidence lasting findings, never for trivial or uncertain observations.\n"
         "- tavily_search: only for external/web information not in the user's files.\n\n"
         "RULES:\n"
         "1. ALWAYS answer the user's actual question with concrete, specific content. NEVER reply with a generic capabilities list or a vague greeting when the user asked something real.\n"
@@ -77,6 +78,7 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "8. When suggesting code improvements, PRIORITIZE by impact. Lead with the 2-3 most important issues specific to THIS code, then briefly mention minor ones. Do NOT dump a long flat list where a critical bug and a cosmetic style nit look equally important.\n"
         "9. Be concise and skip ceremony. No filler like 'Here is a thorough analysis' or 'In summary'. Distinguish improvements SPECIFIC to this code (e.g. 'ask_page mixes three responsibilities') from GENERIC advice that applies to any project (e.g. 'add type hints', 'use i18n'); lead with the specific ones and keep generic advice to a short closing line, if at all.\n"
         "10. When the user asks about IMPACT or DEPENDENCIES of changing a function/class/variable (e.g. 'if I change X, what is affected', 'who calls X', 'where is X used'), use find_references with the symbol name. Report the affected files and lines from the tool; do NOT guess dependencies from reading a single file.\n"
+        "11. After confirming a HIGH-CONFIDENCE finding worth remembering (a vulnerability verified by run_static_analysis, a confirmed bug, an architecture decision, or a decision the user explicitly stated), call save_memory to persist it. Do NOT save trivial, casual, generic, or uncertain things. One memory per distinct finding.\n"
     )
 
     if not nombres:
@@ -84,6 +86,25 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
     else:
         scope = "in the current project" if project is not None else ""
         system_content = base_role + f"\n\nAvailable files {scope}: {', '.join(nombres)}."
+
+    if project is not None:
+        from documents.models import ProjectMemory
+
+        memories = ProjectMemory.objects.filter(
+            project=project,
+            status=ProjectMemory.STATUS_ACTIVE,
+        ).order_by("-updated_at")[:10]
+        if memories:
+            lines = []
+            for m in memories:
+                lines.append(f"- [{m.get_category_display()}] {m.title}: {m.content}")
+            memory_block = (
+                "\n\nKNOWN FINDINGS about this project (from previous analysis). "
+                "Use them as context, but VERIFY with tools before relying on them, "
+                "since code may have changed since they were recorded:\n"
+                + "\n".join(lines)
+            )
+            system_content = system_content + memory_block
 
     messages: list[dict] = [{"role": "system", "content": system_content}]
 
@@ -228,6 +249,16 @@ def project_detail(request, project_id):
 
 
 @login_required
+def project_memories(request, project_id):
+    project = get_object_or_404(Project, id=project_id, user=request.user)
+    memories = project.memories.all()
+    return render(request, "documents/project_memories.html", {
+        "project": project,
+        "memories": memories,
+    })
+
+
+@login_required
 def project_delete(request, project_id):
     project = get_object_or_404(Project, id=project_id, user=request.user)
     if request.method == "POST":
@@ -262,6 +293,17 @@ def conversation_delete(request, conversation_id):
     if project_id:
         return redirect("documents:project_detail", project_id=project_id)
     return redirect("documents:ask_ui")
+
+
+@login_required
+@require_POST
+def memory_delete(request, memory_id):
+    from documents.models import ProjectMemory
+
+    memory = get_object_or_404(ProjectMemory, id=memory_id, user=request.user)
+    project_id = memory.project_id
+    memory.delete()
+    return redirect("documents:project_memories", project_id=project_id)
 
 
 @login_required
