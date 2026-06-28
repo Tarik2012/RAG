@@ -203,3 +203,82 @@ class Message(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:50]}"
+
+
+class ProjectMemory(models.Model):
+    """Un hallazgo estructurado y persistente sobre un proyecto."""
+
+    CATEGORY_BUG = "bug"
+    CATEGORY_VULNERABILITY = "vulnerability"
+    CATEGORY_ARCHITECTURE = "architecture"
+    CATEGORY_LIMITATION = "limitation"
+    CATEGORY_DECISION = "decision"
+    CATEGORY_CHOICES = [
+        (CATEGORY_BUG, "Bug"),
+        (CATEGORY_VULNERABILITY, "Vulnerability"),
+        (CATEGORY_ARCHITECTURE, "Architecture decision"),
+        (CATEGORY_LIMITATION, "Known limitation"),
+        (CATEGORY_DECISION, "User decision"),
+    ]
+
+    STATUS_ACTIVE = "active"
+    STATUS_RESOLVED = "resolved"
+    STATUS_OBSOLETE = "obsolete"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_RESOLVED, "Resolved"),
+        (STATUS_OBSOLETE, "Obsolete"),
+    ]
+
+    project = models.ForeignKey(
+        "Project",
+        on_delete=models.CASCADE,
+        related_name="memories",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="project_memories",
+    )
+    category = models.CharField(max_length=30, choices=CATEGORY_CHOICES)
+    title = models.CharField(max_length=200)
+    content = models.TextField(help_text="El detalle del hallazgo.")
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+    )
+    fingerprint = models.CharField(
+        max_length=64,
+        db_index=True,
+        help_text="Huella para deduplicar (hash de project+category+archivo+resumen).",
+    )
+    evidence = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Prueba: archivo, simbolo, lineas, tool que lo origino.",
+    )
+    times_seen = models.PositiveIntegerField(default=1)
+    source_conversation = models.ForeignKey(
+        "Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="memories_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    last_seen_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        verbose_name_plural = "Project memories"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["project", "fingerprint"],
+                name="unique_project_memory_fingerprint",
+            )
+        ]
+
+    def __str__(self):
+        return f"[{self.category}] {self.title} (project {self.project_id})"

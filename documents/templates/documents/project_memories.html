@@ -1,0 +1,39 @@
+{% extends "core/base.html" %}
+{% block title %}Memorias | {{ project.name }}{% endblock %}
+{% block content %}
+<section class="max-w-4xl mx-auto py-6">
+  <div class="mb-6">
+    <a href="{% url 'documents:project_detail' project.id %}" class="text-sm text-accent hover:underline">&larr; Volver al proyecto</a>
+    <h1 class="text-2xl font-semibold text-gray-900 mt-2">Memoria del proyecto</h1>
+    <p class="text-sm text-gray-500">Hallazgos que el agente recuerda sobre {{ project.name }}.</p>
+  </div>
+
+  {% if memories %}
+  <div class="space-y-3">
+    {% for m in memories %}
+    <div class="bg-white border border-gray-200 rounded-lg p-4">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-medium uppercase tracking-wide px-2 py-0.5 rounded bg-gray-100 text-gray-600">{{ m.get_category_display }}</span>
+            <span class="text-xs px-2 py-0.5 rounded {% if m.status == 'active' %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-500{% endif %}">{{ m.get_status_display }}</span>
+          </div>
+          <h3 class="font-medium text-gray-900">{{ m.title }}</h3>
+          <p class="text-sm text-gray-600 mt-1">{{ m.content }}</p>
+          <p class="text-xs text-gray-400 mt-2">Visto {{ m.times_seen }}x &middot; {{ m.updated_at|date:"d M Y" }}</p>
+        </div>
+        <form method="post" action="{% url 'documents:memory_delete' m.id %}">
+          {% csrf_token %}
+          <button type="submit" class="text-xs text-red-600 hover:text-red-800">Borrar</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="bg-white border border-gray-200 rounded-lg p-8 text-center text-gray-500">
+    Aun no hay memorias. El agente las creara cuando detecte hallazgos importantes.
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

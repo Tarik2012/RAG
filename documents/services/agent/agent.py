@@ -154,6 +154,39 @@ def build_read_file_tool(retriever, user, project=None):
     return read_full_file
 
 
+def _upsert_project_memory(user, project, category, title, content, evidence=None, conversation=None):
+    """Crea o actualiza una memoria de proyecto por fingerprint (dedup). Devuelve (memory, created)."""
+    import hashlib
+
+    from django.utils import timezone
+
+    from documents.models import ProjectMemory
+
+    norm = f"{project.id}:{category}:{title.lower()}"
+    fingerprint = hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+    existing = ProjectMemory.objects.filter(project=project, fingerprint=fingerprint).first()
+    if existing:
+        existing.times_seen += 1
+        existing.last_seen_at = timezone.now()
+        existing.content = content
+        existing.status = ProjectMemory.STATUS_ACTIVE
+        if evidence:
+            existing.evidence = evidence
+        existing.save(update_fields=[
+            "times_seen", "last_seen_at", "content", "status", "evidence", "updated_at"
+        ])
+        return existing, False
+
+    memory = ProjectMemory.objects.create(
+        project=project, user=user, category=category,
+        title=title[:200], content=content,
+        fingerprint=fingerprint, evidence=evidence or {},
+        source_conversation=conversation,
+    )
+    return memory, True
+
+
 def build_static_analysis_tool(user, project=None):
     from documents.services.agent.static_analysis import analyze_code
 
@@ -220,6 +253,28 @@ def build_static_analysis_tool(user, project=None):
             lines.append(f"- [{sev}] line {line_no}: {msg} (rule: {check})")
         if len(results) > 25:
             lines.append(f"\n...and {len(results) - 25} more.")
+
+        # Persistencia por evidencia: guardar vulnerabilidades verificadas en memoria del proyecto
+        if project is not None and results:
+            try:
+                top = []
+                for r in results[:10]:
+                    top.append({
+                        "rule": r.get("check_id", "unknown-rule"),
+                        "line": r.get("start", {}).get("line"),
+                        "severity": r.get("extra", {}).get("severity", ""),
+                        "message": r.get("extra", {}).get("message", "").strip(),
+                    })
+                title = f"Vulnerabilidades detectadas en {document.original_name}"
+                content = f"El analisis estatico encontro {len(results)} hallazgo(s) en {document.original_name}."
+                _upsert_project_memory(
+                    user=user, project=project,
+                    category="vulnerability", title=title, content=content,
+                    evidence={"file": document.original_name, "findings": top},
+                )
+                logger.info("memoria persistida por evidencia: %s", document.original_name)
+            except Exception as exc:
+                logger.warning("fallo persistiendo memoria de vulnerabilidad: %s", exc)
         return "\n".join(lines) + truncated_note
 
     return run_static_analysis
@@ -281,6 +336,51 @@ def build_find_references_tool(user, project=None):
     return find_references
 
 
+def build_save_memory_tool(user, project=None, conversation=None):
+    @tool
+    def save_memory(category: str, title: str, content: str) -> str:
+        """ALWAYS call this immediately after run_static_analysis confirms a security
+        vulnerability, or after you confirm a real bug, an architecture decision, or a decision
+        the user explicitly stated. This persists the finding so future conversations about this
+        project remember it. Saving is a REQUIRED follow-up step, not optional: if you just
+        reported a verified vulnerability or confirmed bug and did NOT call save_memory, you have
+        not finished the task.
+
+        Do NOT call it for trivial observations, casual remarks, generic advice, style nitpicks,
+        or uncertain impressions. One call per distinct finding.
+
+        Args:
+            category: one of 'bug', 'vulnerability', 'architecture', 'limitation', 'decision'.
+            title: a short one-line summary of the finding (max ~15 words).
+            content: the detail of the finding, including the file/symbol it concerns.
+        """
+        if project is None:
+            return "No project in context; cannot save memory."
+        valid = {"bug", "vulnerability", "architecture", "limitation", "decision"}
+        category = (category or "").strip().lower()
+        if category not in valid:
+            return f"Invalid category '{category}'. Use one of: {', '.join(sorted(valid))}."
+        title = (title or "").strip()
+        content = (content or "").strip()
+        if not title or not content:
+            return "Both title and content are required."
+
+        logger.info("tool used: save_memory")
+        memory, created = _upsert_project_memory(
+            user=user,
+            project=project,
+            category=category,
+            title=title,
+            content=content,
+            conversation=conversation,
+        )
+        if created:
+            return f"Saved new memory: '{memory.title}'."
+        return f"Updated existing memory: '{memory.title}' (seen {memory.times_seen}x)."
+
+    return save_memory
+
+
 def build_list_files_tool(user, project=None):
     @tool
     def list_repository_files(query: str = "") -> str:
@@ -326,7 +426,7 @@ class AgentState(TypedDict, total=False):
     retries: int
 
 
-def build_agent(user, project=None):
+def build_agent(user, project=None, conversation=None):
     retriever = Retriever(
         embedding_provider=_get_embedding_provider(),
         query_rewriter=_get_query_rewriter(),
@@ -339,6 +439,7 @@ def build_agent(user, project=None):
         build_list_files_tool(user, project=project),
         build_static_analysis_tool(user, project=project),
         build_find_references_tool(user, project=project),
+        build_save_memory_tool(user, project=project, conversation=conversation),
         build_tavily_tool(),
     ]
     tools = tools + _get_mcp_tools()
