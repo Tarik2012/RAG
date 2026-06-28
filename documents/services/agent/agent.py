@@ -154,6 +154,39 @@ def build_read_file_tool(retriever, user, project=None):
     return read_full_file
 
 
+def _upsert_project_memory(user, project, category, title, content, evidence=None, conversation=None):
+    """Crea o actualiza una memoria de proyecto por fingerprint (dedup). Devuelve (memory, created)."""
+    import hashlib
+
+    from django.utils import timezone
+
+    from documents.models import ProjectMemory
+
+    norm = f"{project.id}:{category}:{title.lower()}"
+    fingerprint = hashlib.sha256(norm.encode("utf-8")).hexdigest()
+
+    existing = ProjectMemory.objects.filter(project=project, fingerprint=fingerprint).first()
+    if existing:
+        existing.times_seen += 1
+        existing.last_seen_at = timezone.now()
+        existing.content = content
+        existing.status = ProjectMemory.STATUS_ACTIVE
+        if evidence:
+            existing.evidence = evidence
+        existing.save(update_fields=[
+            "times_seen", "last_seen_at", "content", "status", "evidence", "updated_at"
+        ])
+        return existing, False
+
+    memory = ProjectMemory.objects.create(
+        project=project, user=user, category=category,
+        title=title[:200], content=content,
+        fingerprint=fingerprint, evidence=evidence or {},
+        source_conversation=conversation,
+    )
+    return memory, True
+
+
 def build_static_analysis_tool(user, project=None):
     from documents.services.agent.static_analysis import analyze_code
 
@@ -220,6 +253,28 @@ def build_static_analysis_tool(user, project=None):
             lines.append(f"- [{sev}] line {line_no}: {msg} (rule: {check})")
         if len(results) > 25:
             lines.append(f"\n...and {len(results) - 25} more.")
+
+        # Persistencia por evidencia: guardar vulnerabilidades verificadas en memoria del proyecto
+        if project is not None and results:
+            try:
+                top = []
+                for r in results[:10]:
+                    top.append({
+                        "rule": r.get("check_id", "unknown-rule"),
+                        "line": r.get("start", {}).get("line"),
+                        "severity": r.get("extra", {}).get("severity", ""),
+                        "message": r.get("extra", {}).get("message", "").strip(),
+                    })
+                title = f"Vulnerabilidades detectadas en {document.original_name}"
+                content = f"El analisis estatico encontro {len(results)} hallazgo(s) en {document.original_name}."
+                _upsert_project_memory(
+                    user=user, project=project,
+                    category="vulnerability", title=title, content=content,
+                    evidence={"file": document.original_name, "findings": top},
+                )
+                logger.info("memoria persistida por evidencia: %s", document.original_name)
+            except Exception as exc:
+                logger.warning("fallo persistiendo memoria de vulnerabilidad: %s", exc)
         return "\n".join(lines) + truncated_note
 
     return run_static_analysis
@@ -282,10 +337,6 @@ def build_find_references_tool(user, project=None):
 
 
 def build_save_memory_tool(user, project=None, conversation=None):
-    import hashlib
-
-    from documents.models import ProjectMemory
-
     @tool
     def save_memory(category: str, title: str, content: str) -> str:
         """ALWAYS call this immediately after run_static_analysis confirms a security
@@ -314,35 +365,18 @@ def build_save_memory_tool(user, project=None, conversation=None):
         if not title or not content:
             return "Both title and content are required."
 
-        # fingerprint: dedup por project + category + title normalizado
-        norm = f"{project.id}:{category}:{title.lower()}"
-        fingerprint = hashlib.sha256(norm.encode("utf-8")).hexdigest()
-
         logger.info("tool used: save_memory")
-        existing = ProjectMemory.objects.filter(
-            project=project,
-            fingerprint=fingerprint,
-        ).first()
-        if existing:
-            from django.utils import timezone
-
-            existing.times_seen += 1
-            existing.last_seen_at = timezone.now()
-            existing.content = content
-            existing.status = ProjectMemory.STATUS_ACTIVE
-            existing.save(update_fields=["times_seen", "last_seen_at", "content", "status", "updated_at"])
-            return f"Updated existing memory: '{title}' (seen {existing.times_seen}x)."
-
-        ProjectMemory.objects.create(
-            project=project,
+        memory, created = _upsert_project_memory(
             user=user,
+            project=project,
             category=category,
-            title=title[:200],
+            title=title,
             content=content,
-            fingerprint=fingerprint,
-            source_conversation=conversation,
+            conversation=conversation,
         )
-        return f"Saved new memory: '{title}'."
+        if created:
+            return f"Saved new memory: '{memory.title}'."
+        return f"Updated existing memory: '{memory.title}' (seen {memory.times_seen}x)."
 
     return save_memory
 
