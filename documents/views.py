@@ -448,6 +448,57 @@ def ask_page(request):
         if not question:
             return redirect("documents:ask_ui")
 
+        from documents.services.router.intent_router import detect_project_audit
+
+        if detect_project_audit(question):
+            if conversation.project is None:
+                answer = "Para auditar todo un proyecto, abre una conversacion asociada a un proyecto."
+                tool_names = []
+            else:
+                from documents.models import AuditRun
+                from documents.tasks import run_project_audit_task
+
+                active = AuditRun.objects.filter(
+                    project=conversation.project,
+                    status__in=[AuditRun.STATUS_PENDING, AuditRun.STATUS_RUNNING],
+                ).first()
+                if active:
+                    answer = (
+                        f"Ya hay una auditoria en curso para este proyecto "
+                        f"(estado: {active.get_status_display()}). Espera a que termine."
+                    )
+                    tool_names = []
+                else:
+                    run = AuditRun.objects.create(
+                        project=conversation.project,
+                        user=request.user,
+                        conversation=conversation,
+                        status=AuditRun.STATUS_PENDING,
+                    )
+                    run_project_audit_task.delay(run.id)
+                    answer = (
+                        f"He lanzado la auditoria de seguridad de todo el proyecto "
+                        f"'{conversation.project.name}'. Se esta procesando en segundo plano; "
+                        f"esto puede tardar unos minutos. Te mostrare el informe cuando termine."
+                    )
+                    tool_names = []
+
+            Message.objects.create(
+                conversation=conversation,
+                role=Message.ROLE_USER,
+                content=question,
+            )
+            if not conversation.title:
+                conversation.title = question[:60]
+                conversation.save(update_fields=["title"])
+            Message.objects.create(
+                conversation=conversation,
+                role=Message.ROLE_ASSISTANT,
+                content=answer,
+                tool_calls=tool_names,
+            )
+            return redirect("documents:ask_ui")
+
         from documents.services.router.intent_router import classify_message
         route = classify_message(question)
         if route == "chat":

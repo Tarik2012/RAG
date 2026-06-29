@@ -6,6 +6,31 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 
+def detect_project_audit(message: str) -> bool:
+    """Detecta de forma determinista si el usuario pide auditar TODO el proyecto.
+    Exige intencion (auditar/escanear/revisar seguridad) Y alcance global (todo el proyecto,
+    repo entero, todos los archivos) en el mismo mensaje. Evita falsos positivos como
+    '¿como funciona la auditoria?'."""
+    if not message:
+        return False
+    text = message.lower()
+
+    intent_terms = [
+        "audita", "auditar", "auditoria", "auditoría",
+        "escanea", "escanear", "scan",
+        "revisa la seguridad", "revisar seguridad", "analiza la seguridad",
+    ]
+    scope_terms = [
+        "todo el proyecto", "proyecto completo", "todo el repo", "repo entero",
+        "repositorio completo", "todos los archivos", "todos los ficheros",
+        "el proyecto entero", "toda la base de codigo", "todo el codigo",
+    ]
+
+    has_intent = any(t in text for t in intent_terms)
+    has_scope = any(t in text for t in scope_terms)
+    return has_intent and has_scope
+
+
 def classify_message(message: str) -> str:
     """Clasifica un mensaje como 'chat' (charla casual) o 'agent' (pregunta real)."""
     if not settings.OPENAI_API_KEY:

@@ -1,7 +1,7 @@
 import logging
 
 from documents.models import Document
-from documents.services.agent.static_analysis import analyze_code
+from documents.services.agent.static_analysis import analyze_code, resolve_language_suffix
 from documents.services.extraction.text_extraction import get_document_full_text
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,8 @@ def audit_project(user, project) -> dict:
             skipped += 1
             continue
         try:
-            result = analyze_code(code, doc.original_name)
+            suffix = resolve_language_suffix(doc.original_name, doc.content_type)
+            result = analyze_code(code, doc.original_name, suffix=suffix)
         except Exception as exc:
             logger.warning("audit: fallo escaneando %s: %s", doc.original_name, exc)
             errors.append({"file": doc.original_name, "error": str(exc)})

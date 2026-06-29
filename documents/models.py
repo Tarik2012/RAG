@@ -282,3 +282,61 @@ class ProjectMemory(models.Model):
 
     def __str__(self):
         return f"[{self.category}] {self.title} (project {self.project_id})"
+
+
+class AuditRun(models.Model):
+    """Una ejecucion de auditoria de seguridad sobre todo un proyecto. Fuente de verdad del
+    estado y el resultado, para ejecucion async (Celery) y seguimiento (polling)."""
+
+    STATUS_PENDING = "pending"
+    STATUS_RUNNING = "running"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RUNNING, "Running"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    project = models.ForeignKey(
+        "Project",
+        on_delete=models.CASCADE,
+        related_name="audit_runs",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="audit_runs",
+    )
+    conversation = models.ForeignKey(
+        "Conversation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_runs",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+    celery_task_id = models.CharField(max_length=255, blank=True, default="")
+
+    total_files = models.PositiveIntegerField(default=0)
+    scanned_files = models.PositiveIntegerField(default=0)
+    findings_count = models.PositiveIntegerField(default=0)
+    error_count = models.PositiveIntegerField(default=0)
+
+    result_json = models.JSONField(default=dict, blank=True)
+    error_text = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"AuditRun {self.pk} [{self.status}] project {self.project_id}"

@@ -188,7 +188,7 @@ def _upsert_project_memory(user, project, category, title, content, evidence=Non
 
 
 def build_static_analysis_tool(user, project=None):
-    from documents.services.agent.static_analysis import analyze_code
+    from documents.services.agent.static_analysis import analyze_code, resolve_language_suffix
 
     @tool
     def run_static_analysis(document_name: str) -> str:
@@ -223,18 +223,7 @@ def build_static_analysis_tool(user, project=None):
         code = full_text[:MAX_CHARS]
         truncated_note = "" if len(full_text) <= MAX_CHARS else "\n\n[Note: file truncated to 50000 chars before analysis.]"
 
-        import os as _os
-        suffix = _os.path.splitext(document.original_name)[1]
-        if not suffix:
-            ct = (document.content_type or "").lower()
-            ct_map = {
-                "text/x-python": ".py", "application/x-python": ".py",
-                "text/javascript": ".js", "application/javascript": ".js",
-                "text/x-java": ".java", "text/x-go": ".go",
-                "text/x-ruby": ".rb", "text/x-php": ".php",
-            }
-            suffix = ct_map.get(ct, "")
-
+        suffix = resolve_language_suffix(document.original_name, document.content_type)
         findings = analyze_code(code, document.original_name, suffix=suffix)
 
         if findings.get("errors"):
