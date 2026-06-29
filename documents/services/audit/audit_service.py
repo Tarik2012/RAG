@@ -1,67 +1,109 @@
 import logging
+import os
+import tempfile
 
 from documents.models import Document
-from documents.services.agent.static_analysis import analyze_code, resolve_language_suffix
+from documents.services.agent.static_analysis import (
+    is_analyzable_file,
+    resolve_language_suffix,
+    scan_directory,
+)
 from documents.services.extraction.text_extraction import get_document_full_text
 
 logger = logging.getLogger(__name__)
 
+MAX_FILE_BYTES = 2_000_000
+
 
 def _is_analyzable(document) -> bool:
-    """Por ahora solo Python (igual que find_references)."""
-    name = document.original_name or ""
-    return name.endswith(".py") or "python" in (document.content_type or "").lower()
+    return is_analyzable_file(document.original_name, document.content_type)
+
+
+def _safe_staged_name(document) -> str:
+    """Nombre staged seguro y unico por documento."""
+    base = os.path.basename(document.original_name or f"doc_{document.id}")
+    base = base.replace("\\", "_").replace("/", "_") or f"doc_{document.id}"
+    suffix = resolve_language_suffix(document.original_name, document.content_type)
+    if suffix and not base.endswith(suffix):
+        base = os.path.splitext(base)[0] + suffix
+    return f"{document.id}/{base}"
 
 
 def audit_project(user, project) -> dict:
-    """Escanea todos los archivos Python analizables de un proyecto con el escaner estatico.
-    Determinista, sin LLM. Devuelve un dict con resumen y hallazgos por archivo.
-    """
-    docs = Document.objects.filter(owner=user, status="processed", project=project)
+    """Escanea todos los archivos analizables de un proyecto en un solo pase de opengrep."""
+    docs = Document.objects.filter(
+        owner=user, status="processed", project=project
+    ).order_by("id")
 
     scanned = 0
     skipped = 0
-    files_with_findings = []
-    total_findings = 0
     errors = []
+    manifest = {}
 
-    for doc in docs:
-        if not _is_analyzable(doc):
-            skipped += 1
-            continue
-        code = get_document_full_text(doc)
-        if not code.strip():
-            skipped += 1
-            continue
-        try:
-            suffix = resolve_language_suffix(doc.original_name, doc.content_type)
-            result = analyze_code(code, doc.original_name, suffix=suffix)
-        except Exception as exc:
-            logger.warning("audit: fallo escaneando %s: %s", doc.original_name, exc)
-            errors.append({"file": doc.original_name, "error": str(exc)})
-            continue
+    with tempfile.TemporaryDirectory() as tmp_root:
+        for doc in docs:
+            if not _is_analyzable(doc):
+                skipped += 1
+                continue
+            code = get_document_full_text(doc)
+            if not code.strip():
+                skipped += 1
+                continue
+            if len(code.encode("utf-8")) > MAX_FILE_BYTES:
+                skipped += 1
+                errors.append({"file": doc.original_name, "error": "archivo demasiado grande, omitido"})
+                continue
 
-        scanned += 1
-        results = result.get("results", [])
-        if results:
-            findings = []
-            for r in results[:25]:
-                findings.append(
-                    {
-                        "rule": r.get("check_id", "unknown-rule"),
-                        "line": r.get("start", {}).get("line"),
-                        "severity": r.get("extra", {}).get("severity", ""),
-                        "message": (r.get("extra", {}).get("message", "") or "").strip(),
-                    }
-                )
-            files_with_findings.append(
+            rel_path = _safe_staged_name(doc)
+            abs_path = os.path.join(tmp_root, rel_path)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, "w", encoding="utf-8") as fh:
+                fh.write(code)
+            manifest[rel_path] = {"original_name": doc.original_name}
+            scanned += 1
+
+        if scanned == 0:
+            return {
+                "project": project.name,
+                "scanned": 0,
+                "skipped": skipped,
+                "files_with_findings": [],
+                "clean_files": 0,
+                "total_findings": 0,
+                "errors": errors,
+            }
+
+        scan_result = scan_directory(tmp_root)
+        errors.extend(scan_result.get("errors", []))
+
+        by_file = {}
+        for r in scan_result.get("results", []):
+            abs_p = r.get("path", "")
+            rel_p = os.path.relpath(abs_p, tmp_root)
+            info = manifest.get(rel_p)
+            if not info:
+                continue
+            name = info["original_name"]
+            by_file.setdefault(name, []).append(
                 {
-                    "file": doc.original_name,
-                    "count": len(results),
-                    "findings": findings,
+                    "rule": r.get("check_id", "unknown-rule"),
+                    "line": r.get("start", {}).get("line"),
+                    "severity": r.get("extra", {}).get("severity", ""),
+                    "message": (r.get("extra", {}).get("message", "") or "").strip(),
                 }
             )
-            total_findings += len(results)
+
+    files_with_findings = []
+    total_findings = 0
+    for name, findings in by_file.items():
+        files_with_findings.append(
+            {
+                "file": name,
+                "count": len(findings),
+                "findings": findings[:25],
+            }
+        )
+        total_findings += len(findings)
 
     return {
         "project": project.name,
