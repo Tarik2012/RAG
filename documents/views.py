@@ -74,7 +74,7 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "4. For casual remarks or greetings (e.g. 'thanks', 'nice', 'ok'), reply briefly and naturally WITHOUT calling any tool.\n"
         "5. Prefer search_uploaded_files for broad questions and read_full_file when the whole file matters.\n"
         "6. Choose the tool by question type: for SECURITY or VULNERABILITIES of ONE specific file, prefer run_static_analysis and base FILE-LEVEL security conclusions on its verified findings. For LEGACY code, explanation, style, architecture, or general quality, prefer read_full_file and your own reasoning.\n"
-        "7. For SECURITY of the WHOLE project, do NOT scan file by file. Instead direct the user to the full-project audit flow ('audita todo el proyecto'). NEVER claim a project is secure based on partial scans. When the scanner returns no findings for one file, do NOT generalize that result to the whole repository.\n"
+        "7. For SECURITY of the WHOLE project or repo, use the run_project_audit tool to launch a full background audit. Do NOT scan file by file, and do NOT tell the user to type magic words. NEVER claim a project is secure based on partial scans. To report what a PAST audit found, use get_latest_audit.\n"
         "8. When suggesting code improvements, PRIORITIZE by impact. Lead with the 2-3 most important issues specific to THIS code, then briefly mention minor ones. Do NOT dump a long flat list where a critical bug and a cosmetic style nit look equally important.\n"
         "9. Be concise and skip ceremony. No filler like 'Here is a thorough analysis' or 'In summary'. Distinguish improvements SPECIFIC to this code (e.g. 'ask_page mixes three responsibilities') from GENERIC advice that applies to any project (e.g. 'add type hints', 'use i18n'); lead with the specific ones and keep generic advice to a short closing line, if at all.\n"
         "10. When the user asks about IMPACT or DEPENDENCIES of changing a function/class/variable (e.g. 'if I change X, what is affected', 'who calls X', 'where is X used'), use find_references with the symbol name. Report the affected files and lines from the tool; do NOT guess dependencies from reading a single file.\n"
@@ -458,65 +458,6 @@ def ask_page(request):
 
         question = request.POST.get("question", "").strip()
         if not question:
-            return redirect("documents:ask_ui")
-
-        from documents.services.router.intent_router import detect_project_audit
-
-        if detect_project_audit(question):
-            if conversation.project is None:
-                answer = "Para auditar todo un proyecto, abre una conversacion asociada a un proyecto."
-                tool_names = []
-            else:
-                from documents.models import AuditRun
-                from documents.tasks import run_project_audit_task
-
-                active = AuditRun.objects.filter(
-                    project=conversation.project,
-                    status__in=[AuditRun.STATUS_PENDING, AuditRun.STATUS_RUNNING],
-                ).first()
-                if active:
-                    from django.urls import reverse
-
-                    report_url = reverse("documents:audit_report", args=[active.id])
-                    answer = (
-                        f"Ya hay una auditoria en curso para este proyecto "
-                        f"(estado: {active.get_status_display()}).\n\n"
-                        f"[Ver el informe de auditoria]({report_url})"
-                    )
-                    tool_names = []
-                else:
-                    run = AuditRun.objects.create(
-                        project=conversation.project,
-                        user=request.user,
-                        conversation=conversation,
-                        status=AuditRun.STATUS_PENDING,
-                    )
-                    run_project_audit_task.delay(run.id)
-                    from django.urls import reverse
-
-                    report_url = reverse("documents:audit_report", args=[run.id])
-                    answer = (
-                        f"He lanzado la auditoria de seguridad de todo el proyecto "
-                        f"'{conversation.project.name}'. Se esta procesando en segundo plano "
-                        f"(suele tardar menos de un minuto).\n\n"
-                        f"[Ver el informe de auditoria]({report_url})"
-                    )
-                    tool_names = []
-
-            Message.objects.create(
-                conversation=conversation,
-                role=Message.ROLE_USER,
-                content=question,
-            )
-            if not conversation.title:
-                conversation.title = question[:60]
-                conversation.save(update_fields=["title"])
-            Message.objects.create(
-                conversation=conversation,
-                role=Message.ROLE_ASSISTANT,
-                content=answer,
-                tool_calls=tool_names,
-            )
             return redirect("documents:ask_ui")
 
         from documents.services.router.intent_router import classify_message

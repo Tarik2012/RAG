@@ -126,6 +126,74 @@ def run_project_audit_task(self, audit_run_id: int):
             "result_json", "scanned_files", "total_files", "findings_count",
             "error_count", "status", "finished_at",
         ])
+        try:
+            from documents.services.agent.agent import _upsert_project_memory
+
+            result = run.result_json or {}
+            files_with_findings = result.get("files_with_findings", [])
+
+            error_count_saved = 0
+            MAX_MEMORIES = 10
+            for file_data in files_with_findings:
+                if error_count_saved >= MAX_MEMORIES:
+                    break
+                file_name = file_data.get("file", "unknown")
+                for finding in file_data.get("findings", []):
+                    if error_count_saved >= MAX_MEMORIES:
+                        break
+                    severity = (finding.get("severity") or "").upper()
+                    if severity != "ERROR":
+                        continue
+                    rule = finding.get("rule", "unknown-rule")
+                    line = finding.get("line")
+                    title = f"Vulnerability in {file_name}: {rule}"
+                    content = (
+                        f"Audit found a {severity} severity issue in {file_name} "
+                        f"(line {line}): {finding.get('message', '')[:300]}"
+                    )
+                    _upsert_project_memory(
+                        user=run.user,
+                        project=run.project,
+                        category="vulnerability",
+                        title=title,
+                        content=content,
+                        evidence={
+                            "file": file_name,
+                            "rule": rule,
+                            "line": line,
+                            "severity": severity,
+                            "source": "project_audit",
+                        },
+                    )
+                    error_count_saved += 1
+
+            summary_title = "Project security audit summary"
+            summary_content = (
+                f"Last project-wide audit found {run.findings_count} security finding(s) "
+                f"across {len(files_with_findings)} file(s), {run.scanned_files} files scanned."
+            )
+            _upsert_project_memory(
+                user=run.user,
+                project=run.project,
+                category="audit_summary",
+                title=summary_title,
+                content=summary_content,
+                evidence={
+                    "findings_count": run.findings_count,
+                    "scanned_files": run.scanned_files,
+                    "source": "project_audit",
+                },
+            )
+            logger.info(
+                "auditoria: %s memorias ERROR + resumen guardadas (AuditRun %s)",
+                error_count_saved,
+                run.id,
+            )
+        except Exception:
+            logger.exception(
+                "auditoria: fallo al destilar hallazgos a memoria (AuditRun %s)",
+                run.id,
+            )
         logger.info(
             "auditoria completada: AuditRun %s, %s hallazgos",
             audit_run_id,

@@ -271,6 +271,97 @@ def build_static_analysis_tool(user, project=None):
     return run_static_analysis
 
 
+def build_get_latest_audit_tool(user, project=None):
+    from documents.models import AuditRun, Document
+
+    @tool
+    def get_latest_audit() -> str:
+        """Get the security posture of the WHOLE project from the most recent audit.
+
+        Use this when the user asks whether the project is secure, what the latest audit found,
+        when it was last audited, or any project-wide security status question. This reads the
+        result of the dedicated project-wide audit (not a single-file scan). Always prefer this
+        over guessing the project's security state.
+        """
+        if project is None:
+            return "No project is associated with this conversation, so there is no project-wide audit."
+
+        run = (
+            AuditRun.objects
+            .filter(user=user, project=project, status=AuditRun.STATUS_COMPLETED)
+            .order_by("-finished_at")
+            .first()
+        )
+        if run is None:
+            running = AuditRun.objects.filter(
+                user=user,
+                project=project,
+                status__in=[AuditRun.STATUS_PENDING, AuditRun.STATUS_RUNNING],
+            ).exists()
+            if running:
+                return "A project-wide audit is currently running. No completed audit yet. Tell the user to wait for it to finish."
+            return "This project has NEVER been audited project-wide. To assess whole-project security, the user should run 'audita todo el proyecto'. Do NOT claim the project is secure without an audit."
+
+        stale = False
+        if run.finished_at:
+            newer = Document.objects.filter(
+                owner=user, project=project, created_at__gt=run.finished_at,
+            ).exists()
+            stale = newer
+
+        lines = []
+        lines.append(f"Latest project-wide audit: completed on {run.finished_at:%Y-%m-%d %H:%M} UTC.")
+        lines.append(f"Scanned {run.scanned_files} files, found {run.findings_count} security finding(s).")
+
+        result = run.result_json or {}
+        files_with_findings = result.get("files_with_findings", [])
+        if files_with_findings:
+            lines.append("Files with findings:")
+            for finding in files_with_findings[:10]:
+                lines.append(f"  - {finding.get('file')}: {finding.get('count')} finding(s)")
+        else:
+            lines.append("No security vulnerabilities were found in the scanned files.")
+
+        if stale:
+            lines.append(
+                "WARNING: files have been added or changed AFTER this audit, so it may be out of date. "
+                "Recommend the user re-run 'audita todo el proyecto' for a current result."
+            )
+
+        return "\n".join(lines)
+
+    return get_latest_audit
+
+
+def build_run_project_audit_tool(user, project=None, conversation=None):
+    from documents.services.audit.audit_launcher import launch_project_audit
+
+    @tool
+    def run_project_audit() -> str:
+        """Launch a full security audit of the ENTIRE project (all files), running in the background.
+
+        Use this ONLY when the user explicitly wants to RUN, LAUNCH, or START a security audit/scan
+        of the WHOLE project or repository (e.g. "audit the whole project", "scan the entire repo",
+        "launch a full security audit", "analiza la seguridad de todo el proyecto").
+
+        Do NOT call this tool for: questions about HOW the audit works, single-file security
+        analysis (use run_static_analysis for that), questions about what a PAST audit found (use
+        get_latest_audit for that), or general security questions. Only call it to actually start
+        a new whole-project audit.
+
+        The audit runs in the background and may take up to a minute. This returns a message with a
+        link to the report; relay it to the user.
+
+        IMPORTANT: The tool result contains a Markdown link to the audit report (in the form
+        [text](url)). You MUST include that exact link verbatim in your response to the user. Do
+        NOT paraphrase it away or omit it. The user needs the clickable link to see the report.
+        """
+        result = launch_project_audit(user, project, conversation=conversation)
+        return result["message"]
+
+    return run_project_audit
+
+
 def build_find_references_tool(user, project=None):
     from documents.services.agent.find_references import find_symbol_usages
     from documents.services.extraction.text_extraction import get_document_full_text
@@ -429,6 +520,8 @@ def build_agent(user, project=None, conversation=None):
         build_read_file_tool(retriever, user, project=project),
         build_list_files_tool(user, project=project),
         build_static_analysis_tool(user, project=project),
+        build_get_latest_audit_tool(user, project=project),
+        build_run_project_audit_tool(user, project=project, conversation=conversation),
         build_find_references_tool(user, project=project),
         build_save_memory_tool(user, project=project, conversation=conversation),
         build_tavily_tool(),
