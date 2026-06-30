@@ -1,0 +1,87 @@
+{% extends "core/base.html" %}
+{% block title %}Auditoria | {{ project.name }}{% endblock %}
+{% block content %}
+<section class="max-w-4xl mx-auto py-6">
+  <div class="mb-6">
+    <a href="{% url 'documents:project_detail' project.id %}" class="text-sm text-accent hover:underline">&larr; Volver al proyecto</a>
+    <h1 class="text-2xl font-semibold text-gray-900 mt-2">Auditoria de seguridad</h1>
+    <p class="text-sm text-gray-500">Proyecto {{ project.name }}</p>
+  </div>
+
+  <div class="mb-6 bg-white border border-gray-200 rounded-lg p-5">
+    <div class="flex items-center justify-between">
+      <div>
+        <span class="text-sm text-gray-500">Estado</span>
+        <div class="mt-1">
+          {% if run.status == 'completed' %}
+            <span class="text-sm font-medium px-3 py-1 rounded bg-green-100 text-green-700">Completada</span>
+          {% elif run.status == 'running' %}
+            <span class="text-sm font-medium px-3 py-1 rounded bg-blue-100 text-blue-700">En proceso...</span>
+          {% elif run.status == 'pending' %}
+            <span class="text-sm font-medium px-3 py-1 rounded bg-gray-100 text-gray-600">En cola</span>
+          {% else %}
+            <span class="text-sm font-medium px-3 py-1 rounded bg-red-100 text-red-700">Fallida</span>
+          {% endif %}
+        </div>
+      </div>
+      {% if run.status == 'completed' %}
+      <div class="text-right text-sm text-gray-600">
+        <div><span class="font-semibold">{{ run.scanned_files }}</span> archivos escaneados</div>
+        <div><span class="font-semibold">{{ run.findings_count }}</span> hallazgos</div>
+      </div>
+      {% endif %}
+    </div>
+    {% if run.status == 'failed' and run.error_text %}
+      <p class="text-sm text-red-600 mt-3">{{ run.error_text }}</p>
+    {% endif %}
+  </div>
+
+  {% if run.status == 'completed' %}
+    {% if result.files_with_findings %}
+      <div class="space-y-4">
+        {% for f in result.files_with_findings %}
+        <div class="bg-white border border-gray-200 rounded-lg p-5">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-medium text-gray-900 font-mono text-sm">{{ f.file }}</h3>
+            <span class="text-xs px-2 py-0.5 rounded bg-red-100 text-red-700">{{ f.count }} hallazgo{{ f.count|pluralize }}</span>
+          </div>
+          <div class="space-y-2">
+            {% for finding in f.findings %}
+            <div class="text-sm border-l-2 border-red-300 pl-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{{ finding.severity|default:"INFO" }}</span>
+                <span class="text-gray-500 text-xs">linea {{ finding.line }}</span>
+              </div>
+              <p class="text-gray-700 mt-1">{{ finding.message }}</p>
+              <p class="text-gray-400 text-xs mt-1 font-mono">{{ finding.rule }}</p>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="bg-white border border-gray-200 rounded-lg p-8 text-center">
+        <p class="text-green-700 font-medium">No se encontraron vulnerabilidades.</p>
+        <p class="text-sm text-gray-500 mt-1">Se escanearon {{ run.scanned_files }} archivos sin hallazgos de seguridad.</p>
+      </div>
+    {% endif %}
+  {% elif run.status == 'running' or run.status == 'pending' %}
+    <div class="bg-white border border-gray-200 rounded-lg p-8 text-center">
+      <svg class="animate-spin h-8 w-8 text-accent mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <p class="text-gray-500">La auditoria se esta ejecutando. Esta pagina se actualizara automaticamente.</p>
+    </div>
+  {% endif %}
+</section>
+<script>
+  (function () {
+    var status = "{{ run.status }}";
+    if (status === "running" || status === "pending") {
+      setTimeout(function () { window.location.reload(); }, 3000);
+    }
+  })();
+</script>
+{% endblock %}
