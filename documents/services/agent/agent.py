@@ -194,6 +194,8 @@ def build_static_analysis_tool(user, project=None):
     def run_static_analysis(document_name: str) -> str:
         """Run a real static analysis security scanner (opengrep) on one uploaded code file and return verified findings.
 
+        For whole-project security requests, use the full-project audit flow instead of repeating this tool file by file. For understanding, explanation, legacy code, architecture, style, or general quality, prefer read_full_file.
+
         Use this when the user asks about code quality, bugs, security vulnerabilities, or risks in a specific file. This runs an actual linter with 1000+ rules across many languages — prefer it over your own judgment when making claims about security or quality, because it returns verified results instead of guesses.
 
         Args:

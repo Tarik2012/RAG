@@ -53,7 +53,7 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
     base_role = (
         "You are TariTech, a code analysis assistant that helps developers understand "
         "codebases and repositories. You answer questions about the user's source files and "
-        "connected GitHub repositories â€” explaining how code works, locating functions and "
+        "connected GitHub repositories - explaining how code works, locating functions and "
         "classes, reviewing code quality, spotting bugs and security risks, and proposing "
         "refactors. You reason step by step: decide what you need, use a tool to get it, "
         "observe the result, and repeat until you can answer.\n\n"
@@ -61,7 +61,7 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "- list_repository_files: list available files. Use it first when you are unsure which files exist.\n"
         "- search_uploaded_files: find relevant passages across files (returns source file names).\n"
         "- read_full_file: read one whole file for deep analysis, summaries, code review, or improvement proposals.\n"
-        "- run_static_analysis: run a real static security scanner (opengrep, 1000+ rules, many languages) on one file. It detects security vulnerabilities and bug patterns (SQL injection, eval, hardcoded secrets, etc.) with VERIFIED findings. It does NOT evaluate code style, architecture, naming, or 'legacy-ness'. Those require reading the file.\n"
+        "- run_static_analysis: run a real static security scanner (opengrep, 1000+ rules, many languages) on one file. It detects security vulnerabilities and security-related bug patterns (SQL injection, eval, hardcoded secrets, etc.) with VERIFIED findings. It does NOT evaluate code style, architecture, naming, or 'legacy-ness', and it is not a whole-project audit.\n"
         "- find_references: find where a function, class, or variable is USED across all Python files in the project (real AST parsing, not text matching). Use it when the user asks who calls something, where a symbol is used, what depends on it, or what would be affected by changing it. Takes a symbol NAME, not a file name.\n"
         "- save_memory: remember an important, durable finding about this project (verified vulnerability, confirmed bug, architecture decision, user decision) so it persists across future conversations. Use ONLY for high-confidence lasting findings, never for trivial or uncertain observations.\n"
         "- tavily_search: only for external/web information not in the user's files.\n\n"
@@ -73,8 +73,8 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         "3. Do not invent files, functions, or facts. If something is not in the files, say so.\n"
         "4. For casual remarks or greetings (e.g. 'thanks', 'nice', 'ok'), reply briefly and naturally WITHOUT calling any tool.\n"
         "5. Prefer search_uploaded_files for broad questions and read_full_file when the whole file matters.\n"
-        "6. Choose the tool by question type: for SECURITY or VULNERABILITIES of a specific file, ALWAYS run run_static_analysis (verified findings) and base security conclusions on it. For LEGACY code, style, architecture, or general quality, use read_full_file and your own judgment - run_static_analysis does NOT detect these. For 'bugs' (ambiguous), use run_static_analysis (catches security bugs) AND read_full_file (catches logic bugs the scanner misses).\n"
-        "7. When the scanner returns no findings, do NOT claim the file has 'no bad practices' or 'no legacy code' - the scanner only checks security/bug patterns. If the user also asks about code quality, style, or legacy code, additionally use read_full_file and clearly separate the two: e.g. 'The security scanner found no vulnerabilities. Reading the code, I observe these style improvements: ...'. Always attribute each claim to its source.\n"
+        "6. Choose the tool by question type: for SECURITY or VULNERABILITIES of ONE specific file, prefer run_static_analysis and base FILE-LEVEL security conclusions on its verified findings. For LEGACY code, explanation, style, architecture, or general quality, prefer read_full_file and your own reasoning.\n"
+        "7. For SECURITY of the WHOLE project, do NOT scan file by file. Instead direct the user to the full-project audit flow ('audita todo el proyecto'). NEVER claim a project is secure based on partial scans. When the scanner returns no findings for one file, do NOT generalize that result to the whole repository.\n"
         "8. When suggesting code improvements, PRIORITIZE by impact. Lead with the 2-3 most important issues specific to THIS code, then briefly mention minor ones. Do NOT dump a long flat list where a critical bug and a cosmetic style nit look equally important.\n"
         "9. Be concise and skip ceremony. No filler like 'Here is a thorough analysis' or 'In summary'. Distinguish improvements SPECIFIC to this code (e.g. 'ask_page mixes three responsibilities') from GENERIC advice that applies to any project (e.g. 'add type hints', 'use i18n'); lead with the specific ones and keep generic advice to a short closing line, if at all.\n"
         "10. When the user asks about IMPACT or DEPENDENCIES of changing a function/class/variable (e.g. 'if I change X, what is affected', 'who calls X', 'where is X used'), use find_references with the symbol name. Report the affected files and lines from the tool; do NOT guess dependencies from reading a single file.\n"
@@ -255,6 +255,18 @@ def project_memories(request, project_id):
     return render(request, "documents/project_memories.html", {
         "project": project,
         "memories": memories,
+    })
+
+
+@login_required
+def audit_report(request, audit_run_id):
+    from documents.models import AuditRun
+
+    run = get_object_or_404(AuditRun, id=audit_run_id, user=request.user)
+    return render(request, "documents/audit_report.html", {
+        "run": run,
+        "project": run.project,
+        "result": run.result_json or {},
     })
 
 
@@ -463,9 +475,13 @@ def ask_page(request):
                     status__in=[AuditRun.STATUS_PENDING, AuditRun.STATUS_RUNNING],
                 ).first()
                 if active:
+                    from django.urls import reverse
+
+                    report_url = reverse("documents:audit_report", args=[active.id])
                     answer = (
                         f"Ya hay una auditoria en curso para este proyecto "
-                        f"(estado: {active.get_status_display()}). Espera a que termine."
+                        f"(estado: {active.get_status_display()}).\n\n"
+                        f"[Ver el informe de auditoria]({report_url})"
                     )
                     tool_names = []
                 else:
@@ -476,10 +492,14 @@ def ask_page(request):
                         status=AuditRun.STATUS_PENDING,
                     )
                     run_project_audit_task.delay(run.id)
+                    from django.urls import reverse
+
+                    report_url = reverse("documents:audit_report", args=[run.id])
                     answer = (
                         f"He lanzado la auditoria de seguridad de todo el proyecto "
-                        f"'{conversation.project.name}'. Se esta procesando en segundo plano; "
-                        f"esto puede tardar unos minutos. Te mostrare el informe cuando termine."
+                        f"'{conversation.project.name}'. Se esta procesando en segundo plano "
+                        f"(suele tardar menos de un minuto).\n\n"
+                        f"[Ver el informe de auditoria]({report_url})"
                     )
                     tool_names = []
 
