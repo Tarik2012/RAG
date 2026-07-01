@@ -1,7 +1,7 @@
 import logging
 import os
 from functools import lru_cache
-from typing import TypedDict
+from typing import Annotated, TypedDict
 
 from asgiref.sync import async_to_sync
 from django.conf import settings
@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 from langchain_core.tools import tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, START, END, add_messages
 from langgraph.prebuilt import create_react_agent
 
 from documents.models import Document
@@ -503,7 +503,7 @@ def build_tavily_tool():
 
 
 class AgentState(TypedDict, total=False):
-    messages: list
+    messages: Annotated[list, add_messages]
     answer_ok: bool
     retries: int
 
