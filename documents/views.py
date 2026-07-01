@@ -84,6 +84,11 @@ def _build_agent_messages(*, user, question: str, history: list | None = None, p
         memories = ProjectMemory.objects.filter(
             project=project,
             status=ProjectMemory.STATUS_ACTIVE,
+        ).exclude(
+            category__in=[
+                ProjectMemory.CATEGORY_VULNERABILITY,
+                ProjectMemory.CATEGORY_AUDIT_SUMMARY,
+            ]
         ).order_by("-updated_at")[:10]
         if memories:
             lines = []
