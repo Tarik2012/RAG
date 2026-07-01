@@ -4,7 +4,7 @@ from celery import shared_task
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from documents.models import AuditRun, Document
+from documents.models import AuditRun, Document, ProjectMemory
 from documents.services.audit.audit_service import audit_project
 from documents.services.document_processor import process_document
 from documents.services.github.repo_ingestor import ingest_repo_file
@@ -175,7 +175,7 @@ def run_project_audit_task(self, audit_run_id: int):
             _upsert_project_memory(
                 user=run.user,
                 project=run.project,
-                category="audit_summary",
+                category=ProjectMemory.CATEGORY_AUDIT_SUMMARY,
                 title=summary_title,
                 content=summary_content,
                 evidence={

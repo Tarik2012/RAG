@@ -213,12 +213,14 @@ class ProjectMemory(models.Model):
     CATEGORY_ARCHITECTURE = "architecture"
     CATEGORY_LIMITATION = "limitation"
     CATEGORY_DECISION = "decision"
+    CATEGORY_AUDIT_SUMMARY = "audit_summary"
     CATEGORY_CHOICES = [
         (CATEGORY_BUG, "Bug"),
         (CATEGORY_VULNERABILITY, "Vulnerability"),
         (CATEGORY_ARCHITECTURE, "Architecture decision"),
         (CATEGORY_LIMITATION, "Known limitation"),
         (CATEGORY_DECISION, "User decision"),
+        (CATEGORY_AUDIT_SUMMARY, "Audit summary"),
     ]
 
     STATUS_ACTIVE = "active"

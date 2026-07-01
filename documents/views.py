@@ -18,8 +18,8 @@ from documents.tasks import generate_documentation_task, ingest_repo_task, proce
 
 logger = logging.getLogger(__name__)
 
-def _build_agent_service(user, project=None):
-    return build_agent(user, project=project)
+def _build_agent_service(user, project=None, conversation=None):
+    return build_agent(user, project=project, conversation=conversation)
 
 
 def _casual_reply(message: str) -> str:
@@ -464,7 +464,11 @@ def ask_page(request):
                     .values("role", "content")[:6]
                 )
                 history.reverse()
-                agent = _build_agent_service(request.user, project=conversation.project)
+                agent = _build_agent_service(
+                    request.user,
+                    project=conversation.project,
+                    conversation=conversation,
+                )
                 result = agent.invoke(
                     {"messages": _build_agent_messages(
                         user=request.user,
